@@ -1,328 +1,129 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+
+const PAGE_SIZE = 3; // API dagi size bilan bir xil bo‘lishi kerak
 
 const ElonlarRoyxati = () => {
     const [apartments, setApartments] = useState([]);
-    const [goldApartments, setGoldApartments] = useState([]);
-    const [hiddenApartments, setHiddenApartments] = useState([]);
-    const [deletedApartments, setDeletedApartments] = useState([]);
-    const [error, setError] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState("Barchasi");
-    const [dropdownOpenIndex, setDropdownOpenIndex] = useState(null);
+    const [error, setError] = useState(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         const fetchApartments = async () => {
-            try {
-                const [apartmentsRes, goldRes, hiddenRes, deletedRes] = await Promise.all([
-                    fetch("http://localhost:5000/apartments")
-                        .then((res) => (res.ok ? res.json() : Promise.reject(`Failed to fetch apartments: ${res.status}`)))
-                        .catch((err) => {
-                            console.error("Apartments fetch error:", err);
-                            return [];
-                        }),
-                    fetch("http://localhost:5000/goldApartments")
-                        .then((res) => (res.ok ? res.json() : Promise.reject(`Failed to fetch goldApartments: ${res.status}`)))
-                        .catch((err) => {
-                            console.error("GoldApartments fetch error:", err);
-                            return [];
-                        }),
-                    fetch("http://localhost:5000/hiddenApartments")
-                        .then((res) => (res.ok ? res.json() : Promise.reject(`Failed to fetch hiddenApartments: ${res.status}`)))
-                        .catch((err) => {
-                            console.error("HiddenApartments fetch error:", err);
-                            return [];
-                        }),
-                    fetch("http://localhost:5000/deletedApartments")
-                        .then((res) => (res.ok ? res.json() : Promise.reject(`Failed to fetch deletedApartments: ${res.status}`)))
-                        .catch((err) => {
-                            console.error("DeletedApartments fetch error:", err);
-                            return [];
-                        }),
-                ]);
+            const token = localStorage.getItem("token");
+            if (!token) {
+                console.error("Token yo‘q!");
+                return;
+            }
 
-                setApartments(apartmentsRes);
-                setGoldApartments(goldRes);
-                setHiddenApartments(hiddenRes);
-                setDeletedApartments(deletedRes);
+            try {
+                const response = await fetch(
+                    `http://167.99.245.227/api/v1/adminka/get_house/?page=${currentPage}&size=${PAGE_SIZE}`,
+                    {
+                        method: "GET",
+                        headers: {
+                            "Authorization": `Bearer ${token}`,
+                            "Content-Type": "application/json",
+                        },
+                    }
+                );
+                console.log(apartments);
+
+                if (!response.ok) {
+                    throw new Error(`API xatolik qaytardi: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (!data || !Array.isArray(data.data)) {
+                    throw new Error("API noto‘g‘ri formatda ma'lumot qaytardi");
+                }
+
+                setApartments(data.data);
+                setTotalCount(data.count);
             } catch (error) {
-                console.error("Error fetching data:", error);
-                setError(error.toString());
+                console.error("Fetch xatolik berdi:", error);
+                setError(error.message);
             } finally {
                 setLoading(false);
             }
         };
 
         fetchApartments();
-    }, []);
+    }, [currentPage]);
 
-    const handleStatusChange = async (apartmentId, newStatus) => {
-        let apartment;
-        if (activeTab === "Barchasi") {
-            apartment = apartments.find((apt) => apt.id === apartmentId);
-        } else if (activeTab === "Gold e'lonlar") {
-            apartment = goldApartments.find((apt) => apt.id === apartmentId);
-        } else if (activeTab === "Berkitilgan") {
-            apartment = hiddenApartments.find((apt) => apt.id === apartmentId);
-        } else if (activeTab === "O‘chirilgan") {
-            apartment = deletedApartments.find((apt) => apt.id === apartmentId);
-        }
-
-        if (!apartment) return;
-
-        const currentEndpoint = {
-            Barchasi: "apartments",
-            "Gold e'lonlar": "goldApartments",
-            Berkitilgan: "hiddenApartments",
-            "O‘chirilgan": "deletedApartments",
-        }[activeTab];
-
-        const targetEndpoint = {
-            All: "apartments",
-            Gold: "goldApartments",
-            Berkitilgan: "hiddenApartments",
-            "O'chirilgan": "deletedApartments",
-        }[newStatus];
-
-        if (currentEndpoint === targetEndpoint) {
-            setDropdownOpenIndex(null);
-            return;
-        }
-
-        try {
-            const deleteResponse = await fetch(`http://localhost:5000/${currentEndpoint}/${apartmentId}`, {
-                method: "DELETE",
-            });
-            if (!deleteResponse.ok) {
-                throw new Error(`Failed to delete apartment from ${currentEndpoint}: ${deleteResponse.status}`);
-            }
-
-            const postResponse = await fetch(`http://localhost:5000/${targetEndpoint}`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ ...apartment, status: newStatus }),
-            });
-            if (!postResponse.ok) {
-                throw new Error(`Failed to add apartment to ${targetEndpoint}: ${postResponse.status}`);
-            }
-
-            if (activeTab === "Barchasi") {
-                setApartments((prev) => prev.filter((apt) => apt.id !== apartmentId));
-            } else if (activeTab === "Gold e'lonlar") {
-                setGoldApartments((prev) => prev.filter((apt) => apt.id !== apartmentId));
-            } else if (activeTab === "Berkitilgan") {
-                setHiddenApartments((prev) => prev.filter((apt) => apt.id !== apartmentId));
-            } else if (activeTab === "O‘chirilgan") {
-                setDeletedApartments((prev) => prev.filter((apt) => apt.id !== apartmentId));
-            }
-
-            if (newStatus === "All") {
-                setApartments((prev) => [...prev, { ...apartment, status: newStatus }]);
-            } else if (newStatus === "Gold") {
-                setGoldApartments((prev) => [...prev, { ...apartment, status: newStatus }]);
-            } else if (newStatus === "Berkitilgan") {
-                setHiddenApartments((prev) => [...prev, { ...apartment, status: newStatus }]);
-            } else if (newStatus === "O'chirilgan") {
-                setDeletedApartments((prev) => [...prev, { ...apartment, status: newStatus }]);
-            }
-        } catch (error) {
-            console.error("Error updating status:", error);
-            setError(error.toString());
-        } finally {
-            setDropdownOpenIndex(null);
-        }
+    const handleRowClick = (apartmentId) => {
+        navigate(`/apartment/${apartmentId}`);
     };
 
-    const displayedApartments = () => {
-        if (activeTab === "Barchasi") return apartments;
-        if (activeTab === "Gold e'lonlar") return goldApartments;
-        if (activeTab === "Berkitilgan") return hiddenApartments;
-        if (activeTab === "O‘chirilgan") return deletedApartments;
-        return [];
-    };
-
-    if (loading) {
-        return <div className="text-gray-500">Loading...</div>;
-    }
-
-    if (error) {
-        return <div className="text-red-500">Error: {error}</div>;
-    }
+    if (loading) return <div className="text-gray-500 text-center py-4">Loading...</div>;
+    if (error) return <div className="text-red-500 text-center py-4">Xatolik: {error}</div>;
 
     return (
-        <div className="bg-gray-100 min-h-screen pl-[16px] pb-[16px]">
-            {/* Header */}
-            <div className="mt-[16px] h-[34px] flex items-center">
-                <h1 className="font-inter font-medium text-[28px] leading-[34px] text-gray-900">
-                    E'lonlar ro‘yxati
-                </h1>
-            </div>
+        <div className="bg-gray-100 min-h-screen p-4">
+            <h1 className="text-2xl font-bold mb-4 text-center">E'lonlar ro‘yxati</h1>
 
-            {/* Navigation Tabs with Gradient Text */}
-            <div className="mt-[16px] h-[34px] flex items-center bg-gray-100 border-b border-gray-300 relative">
-                <nav className="flex space-x-[24px] w-full">
-                    {["Barchasi", "Gold e'lonlar", "Berkitilgan", "O‘chirilgan"].map(
-                        (item, index) => (
-                            <span
-                                key={index}
-                                onClick={() => setActiveTab(item)}
-                                className="text-[14px] font-bold font-inter leading-[140%] tracking-[0.5%] cursor-pointer relative"
-                                style={
-                                    activeTab === item
-                                        ? {
-                                            background: "linear-gradient(117.4deg, #0AA3A1 0%, #B4C29E 96.03%)",
-                                            WebkitBackgroundClip: "text",
-                                            WebkitTextFillColor: "transparent",
-                                        }
-                                        : {
-                                            color: "rgba(102, 112, 133, 1)",
-                                        }
-                                }
-                            >
-                                {item}
-                                {activeTab === item && (
-                                    <span
-                                        className="absolute bottom-0 left-0 w-full h-[1px]"
-                                        style={{
-                                            bottom: "-1px",
-                                            zIndex: 10,
-                                            background: "linear-gradient(117.4deg, #0AA3A1 0%, #B4C29E 96.03%)",
-                                        }}
-                                    />
-                                )}
-                            </span>
-                        )
-                    )}
-                </nav>
-            </div>
-
-            {/* Table */}
-            <div className="mt-[16px] bg-white rounded-lg shadow">
+            <div className="bg-white rounded-lg shadow overflow-hidden">
                 <table className="w-full border-collapse">
-                    <thead className="bg-white">
-                        <tr className="border-b border-gray-300">
+                    <thead className="bg-gray-200">
+                        <tr className="border-b border-gray-300 text-left">
                             {[
-                                "Rasm va Manzil",
-                                "Nomi",
-                                "Uy narxi",
-                                "Xonalar",
-                                "Qurilgan yili",
-                                "Maydoni",
-                                "Yuklangan sana",
+                                "Rasm", "Tuman", "Kvartal", "Narxi", "Xonalar", "Maydon (m²)", "Sana"
                             ].map((header, index) => (
-                                <th
-                                    key={index}
-                                    className="p-[16px] text-left text-[12px] font-semibold font-inter leading-[15.84px] tracking-[0.5%] bg-white text-[#858D9D]"
-                                >
+                                <th key={index} className="p-4 text-sm font-semibold text-gray-600">
                                     {header}
                                 </th>
                             ))}
-                            <th className="p-[16px]"></th>
                         </tr>
                     </thead>
                     <tbody>
-                        {displayedApartments().map((apartment, index) => (
-                            <tr key={apartment.id}>
-                                {/* Rasm va Manzil side by side */}
-                                <td className="p-[16px] flex items-center">
+                        {apartments.map((apartment) => (
+                            <tr
+                                key={apartment.id}
+                                onClick={() => handleRowClick(apartment.id)}
+                                className="hover:bg-gray-50 cursor-pointer border-b"
+                            >
+                                <td className="p-4">
                                     <img
-                                        src={
-                                            apartment.image.startsWith("file:///") ||
-                                                !apartment.image.includes("http")
-                                                ? "https://via.placeholder.com/40"
-                                                : apartment.image
-                                        }
+                                        src={apartment.image1 ? `http://167.99.245.227/${apartment.image1}` : "https://via.placeholder.com/50"}
                                         alt="apartment"
-                                        className="w-[40px] h-[40px] rounded-none mr-[8px]"
+                                        className="w-12 h-12 object-cover rounded"
                                     />
-                                    <span
-                                        className="text-gray-900 font-inter"
-                                        style={{
-                                            maxWidth: "143px",
-                                            overflow: "hidden",
-                                            textOverflow: "ellipsis",
-                                            whiteSpace: "nowrap",
-                                        }}
-                                    >
-                                        {apartment.Adres}
-                                    </span>
                                 </td>
-
-                                {/* Nomi */}
-                                <td className="p-[16px]">{apartment.category}</td>
-
-                                {/* Uy Narxi */}
-                                <td className="p-[16px]">${apartment.price.toLocaleString()}</td>
-
-                                {/* Xonalar */}
-                                <td className="p-[16px]">{apartment.rooms}</td>
-
-                                {/* Qurilgan Yili */}
-                                <td className="p-[16px]">{apartment.year}</td>
-
-                                {/* Maydoni */}
-                                <td className="p-[16px]">{apartment.area}</td>
-
-                                {/* Yuklangan Sana */}
-                                <td className="p-[16px]">{apartment.time}</td>
-
-                                {/* Dropdown Menu */}
-                                <td className="p-[16px] text-center relative">
-                                    <button
-                                        onClick={() =>
-                                            setDropdownOpenIndex(
-                                                dropdownOpenIndex === index ? null : index
-                                            )
-                                        }
-                                        className="text-gray-500 hover:text-gray-700 text-xl font-bold"
-                                    >
-                                        ...
-                                    </button>
-                                    {dropdownOpenIndex === index && (
-                                        <div className="absolute right-4 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                                            <ul className="py-2">
-                                                <li
-                                                    onClick={() => handleStatusChange(apartment.id, "Gold")}
-                                                    className="px-4 py-2 text-sm font-inter flex items-center hover:bg-gray-100 cursor-pointer"
-                                                >
-                                                    <img
-                                                        src="https://i.imgur.com/ol5HI0W.jpeg"
-                                                        alt="Gold icon"
-                                                        className="w-5 h-5 mr-2"
-                                                    />
-                                                    <span className="text-yellow-500">Goldga o'tkazish</span>
-                                                </li>
-                                                <li
-                                                    onClick={() => handleStatusChange(apartment.id, "Berkitilgan")}
-                                                    className="px-4 py-2 text-sm font-inter flex items-center hover:bg-gray-100 cursor-pointer"
-                                                >
-                                                    <img
-                                                        src="https://i.imgur.com/V5YYWeQ.jpeg"
-                                                        alt="Pin icon"
-                                                        className="w-5 h-5 mr-2"
-                                                    />
-                                                    <span className="text-gray-500">Berkitish</span>
-                                                </li>
-                                                <li
-                                                    onClick={() => handleStatusChange(apartment.id, "O'chirilgan")}
-                                                    className="px-4 py-2 text-sm font-inter flex items-center hover:bg-gray-100 cursor-pointer"
-                                                >
-                                                    <img
-                                                        src="https://i.imgur.com/MWaj9bJ.png"
-                                                        alt="Delete icon"
-                                                        className="w-5 h-5 mr-2"
-                                                    />
-                                                    <span className="text-red-500">O'chirish</span>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    )}
-                                </td>
+                                <td className="p-4">{apartment.tuman || "Noma'lum"}</td>
+                                <td className="p-4">{apartment.kvartl || "Noma'lum"}</td>
+                                <td className="p-4 font-semibold">${apartment.narxi?.toLocaleString() || "Noma'lum"}</td>
+                                <td className="p-4">{apartment.xona_soni || "Noma'lum"}</td>
+                                <td className="p-4">{apartment.maydon || "Noma'lum"} m²</td>
+                                <td className="p-4">{new Date(apartment.created_at).toLocaleDateString("uz-UZ") || "Noma'lum"}</td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex justify-center items-center mt-4 space-x-2">
+                <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                    className={`flex items-center gap-2 px-4 py-2 rounded ${currentPage === 1 ? "bg-gray-300 cursor-not-allowed" : "bg-blue-500 text-white"}`}
+                >
+                    ⬅️ Oldingi
+                </button>
+                <span className="text-gray-700">
+                    {currentPage} / {Math.ceil(totalCount / PAGE_SIZE)}
+                </span>
+                <button
+                    disabled={currentPage >= Math.ceil(totalCount / PAGE_SIZE)}
+                    onClick={() => setCurrentPage((prev) => prev + 1)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded ${currentPage >= Math.ceil(totalCount / PAGE_SIZE) ? "bg-gray-300 cursor-not-allowed" : "bg-blue-500 text-white"}`}
+                >
+                    Keyingi ➡️
+                </button>
             </div>
         </div>
     );

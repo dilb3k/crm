@@ -14,56 +14,61 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (user) {
-      navigate("/"); // 🔹 Agar user bo‘lsa, dashboard'ga o‘tkazamiz
+      navigate("/"); // 🔹 Если пользователь уже залогинен, перенаправляем на главную
     }
   }, []);
 
-  const login = async (username, password) => {
+  const login = async (phone, password) => {
     try {
-      console.log("🟡 Login so‘rovi yuborilyapti...");
-  
-      const response = await fetch("http://localhost:5000/users");
-  
-      if (!response.ok) {
-        throw new Error(`Server xatosi: ${response.status}`);
-      }
-  
+      console.log("🟡 Отправка запроса на вход...");
+
+      const response = await fetch("http://167.99.245.227/api/v1/adminka/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ phone, password }),
+      });
+
       const data = await response.json();
-      console.log("🟢 Serverdan kelgan data:", data); // 🔥 Server javobini ko‘rish uchun
-  
-      // Agar "users" kaliti bo'lsa, ichidagi massivni olish
-      const users = Array.isArray(data) ? data : data.users;
-  
-      if (!Array.isArray(users)) {
-        throw new Error("Server noto‘g‘ri formatda javob qaytardi, users array emas");
+      console.log("🟢 Ответ от сервера:", data); // ➜ Выведем полный ответ в консоль
+
+      if (!response.ok) {
+        throw new Error(`Ошибка сервера: ${response.status}`);
       }
-  
-      const loggedInUser = users.find(
-        (u) => u.login === username && u.password === password
-      );
-  
-      if (loggedInUser) {
-        console.log("✅ Foydalanuvchi topildi:", loggedInUser);
-        localStorage.setItem("user", JSON.stringify(loggedInUser));
-        setUser(loggedInUser);
+
+      if (data.access_token) { // ✅ Проверяем access_token
+        console.log("✅ Успешный вход");
+        localStorage.setItem("token", data.access_token); // ✅ Сохраняем access_token
+        localStorage.setItem("user", JSON.stringify({ 
+          id: data.user_id,
+          name: data.name,
+          phone: data.phone,
+          isAdmin: data.is_admin
+        }));
+        setUser({
+          id: data.user_id,
+          name: data.name,
+          phone: data.phone,
+          isAdmin: data.is_admin
+        });
         setError("");
         navigate("/");
       } else {
-        console.log("❌ Login yoki parol noto‘g‘ri");
-        setError("Login yoki parol xato");
+        console.error("❌ Сервер не вернул токен:", data);
+        throw new Error("Не удалось получить токен. Неправильные данные.");
       }
     } catch (error) {
-      console.error("❌ Xatolik:", error);
-      setError("Server bilan muammo bor. Keyinroq urinib ko‘ring.");
+      console.error("❌ Ошибка:", error.message);
+      setError("Неправильный логин или пароль.");
     }
   };
-  
-
 
   const logout = () => {
+    localStorage.removeItem("token");
     localStorage.removeItem("user");
     setUser(null);
-    navigate("/login"); // 🔹 Logout qilganda login sahifasiga yo‘naltiramiz
+    navigate("/login"); // 🔹 При выходе отправляем на страницу логина
   };
 
   return (
