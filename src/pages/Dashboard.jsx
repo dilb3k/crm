@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import Chart from "react-apexcharts";
+import Click from '../../public/assets/icons/click.png'
+import Payme from '../../public/assets/icons/payme.png'
+
 
 const Dashboard = () => {
     const [selectedMonth, setSelectedMonth] = useState("Jan");
@@ -13,18 +16,33 @@ const Dashboard = () => {
         CLICK: Array.from({ length: 30 }, () => Math.floor(Math.random() * 1000)),
         Payme: Array.from({ length: 30 }, () => Math.floor(Math.random() * 700)),
     };
-
     const lineChartOptions = {
         chart: { type: "area", toolbar: { show: false } },
-        colors: ["#6B46C1", "#38A169"],
+        colors: ["#643DFF", "#29CCB0"], // Binafsha va yashil
         dataLabels: { enabled: false },
         stroke: { curve: "smooth" },
-        xaxis: { categories: Array.from({ length: 30 }, (_, i) => i + 1) },
-        legend: { position: "top", markers: { width: 10, height: 10 } }
+        xaxis: { categories: Array.from({ length: 12 }, (_, i) => i + 1) },
+        legend: {
+            position: "top", // Legendni grafikning yuqorisiga joylashtiramiz
+            horizontalAlign: "right", // O‘ng tomonga suramiz
+            markers: { width: 0, height: 0 }, // Standart markerlarni yashiramiz
+            itemMargin: { horizontal: 10, vertical: 5 }, // Elementlar orasidagi masofani moslaymiz
+            formatter: function (seriesName) {
+                let icon = seriesName === "CLICK" ? Click : Payme;
+                return `<img src="${icon}" alt="${seriesName}" width="68" height="25" style="margin: 0 5px;"/>`;
+            }
+        }
     };
+    
+    
+    
+    
+
+
+
     const lineChartData = [
-        { name: "CLICK", data: dailyData.CLICK },
-        { name: "Payme", data: dailyData.Payme }
+        { data: dailyData.CLICK, img: Click },
+        { data: dailyData.Payme, img: Payme }
     ];
 
     const barChartOptions = {

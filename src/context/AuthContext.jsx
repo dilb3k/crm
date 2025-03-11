@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log("🟡 Отправка запроса на вход...");
 
-      const response = await fetch("http://167.99.245.227/api/v1/adminka/login", {
+      const response = await fetch("https://fast.uysavdo.com/api/v1/adminka/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

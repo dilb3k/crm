@@ -20,7 +20,7 @@ const Navbar = () => {
     }, []);
 
     return (
-        <div className="flex items-center justify-between px-6 py-2 bg-white border-b">
+        <div className="flex items-center justify-between px-6 py-3 bg-white border-b">
             <div className="flex items-center space-x-2 border p-2 rounded-lg w-72">
                 <img src={SearchIcon} alt="Search" width={16} height={16} />
                 <input type="text" placeholder="Search..." className="outline-none w-full text-gray-600" />

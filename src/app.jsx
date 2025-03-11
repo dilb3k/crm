@@ -9,6 +9,8 @@ import Foydalanuvchilar from "./pages/Foydalanuvchilar";
 import PrivateRoute from "./components/PrivateRoute";
 import MainPage from "./pages/MainPage";
 import ApartmentDetails from "./pages/ApartmentDetailsPage";
+import Maklerlar from "./pages/Foydalanuvchilar";
+import MaklerDetail from "./pages/MaklerDetail";
 
 const ProtectedDashboard = () => {
   const { user } = useAuth();
@@ -22,18 +24,20 @@ function App() {
         {/* Login sahifasi */}
         <Route path="/login" element={<LoginPage />} />
 
-        {/* PrivateRoute orqali himoyalangan yo‘nalishlar */}
+        {/* PrivateRoute orqali himoyalangan yo'nalishlar */}
         <Route element={<PrivateRoute />}>
           <Route path="/" element={<MainPage />}>
             {/* ✅ Statistika faqat adminlar uchun */}
             <Route index element={<ProtectedDashboard />} />
             <Route path="elonlarRoyxati" element={<ElonlarRoyxati />} />
-            <Route path="foydalanuvchilar" element={<Foydalanuvchilar />} />
+            <Route path="maklerlar" element={<Maklerlar />} />
             <Route path="apartment/:id" element={<ApartmentDetails />} />
+            {/* Add Makler Detail Route */}
+            <Route path="makler/:id" element={<MaklerDetail />} />
           </Route>
         </Route>
 
-        {/* Not Found yoki Standart yo‘nalish */}
+        {/* Not Found yoki Standart yo'nalish */}
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     </AuthProvider>
