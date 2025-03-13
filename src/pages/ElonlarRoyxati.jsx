@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 15;
 
 const ElonlarRoyxati = () => {
     const [apartments, setApartments] = useState([]);
@@ -239,7 +239,9 @@ const ElonlarRoyxati = () => {
                                     >
                                         <td className="h-[64px] flex items-center pl-[24px]">
                                             <img
-                                                src={apartment.image1 ? `https://fast.uysavdo.com/uploads/${apartment.image1}` : "https://via.placeholder.com/40"}
+                                                src={apartment.image1
+                                                    ? `https://fast.uysavdo.com/uploads/${apartment.image1.replace('home_images/', '')}`
+                                                    : "https://via.placeholder.com/40"}
                                                 alt="apartment"
                                                 className="w-10 h-10 object-cover rounded"
                                                 onError={(e) => { e.target.src = "https://via.placeholder.com/40"; }}

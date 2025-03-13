@@ -16,7 +16,7 @@ const ApartmentDetails = () => {
         const fetchApartment = async () => {
             const token = localStorage.getItem("token");
             if (!token) {
-                console.error("Token yo‘q!");
+                console.error("Token yo'q!");
                 setError("Tizimga kiring!");
                 setLoading(false);
                 return;
@@ -38,15 +38,16 @@ const ApartmentDetails = () => {
                     setApartment(result.data);
                     // Set initial images
                     if (result.data.image1) {
-                        setLargeImage(`https://fast.uysavdo.com/${result.data.image1}`);
+                        // Fix: Remove home_images/ prefix from image paths
+                        setLargeImage(`https://fast.uysavdo.com/uploads/${result.data.image1.replace('home_images/', '')}`);
                         setSmallImages([
-                            `http://167.99.245.227/${result.data.image1}`,
-                            `http://167.99.245.227/${result.data.image2}`,
-                            `http://167.99.245.227/${result.data.image3}`,
+                            result.data.image1 ? `https://fast.uysavdo.com/uploads/${result.data.image1.replace('home_images/', '')}` : null,
+                            result.data.image2 ? `https://fast.uysavdo.com/uploads/${result.data.image2.replace('home_images/', '')}` : null,
+                            result.data.image3 ? `https://fast.uysavdo.com/uploads/${result.data.image3.replace('home_images/', '')}` : null,
                         ].filter(Boolean)); // Filter out undefined/null values
                     }
                 } else {
-                    setError("Uy ma’lumotlari topilmadi!");
+                    setError("Uy ma'lumotlari topilmadi!");
                 }
             } catch (err) {
                 setError("Ma'lumotni yuklashda xatolik yuz berdi");
@@ -115,7 +116,6 @@ const ApartmentDetails = () => {
         }
     };
 
-
     const handlePrevImage = () => {
         if (currentImageIndex > 0) {
             setCurrentImageIndex(currentImageIndex - 1);
@@ -142,7 +142,6 @@ const ApartmentDetails = () => {
                 <h1 className="font-inter font-medium text-2xl leading-8 text-left ">Mahsulot tafsilotlari</h1>
 
                 {/* Back Button */}
-
 
                 {/* Breadcrumb and Buttons */}
                 <div className="pb-4 md:pb-6">
@@ -187,8 +186,6 @@ const ApartmentDetails = () => {
                                 Goldga o'tkazish
                             </button>
                         </div>
-
-
                     </div>
                 </div>
                 {/* Image Gallery and Details */}
@@ -223,12 +220,11 @@ const ApartmentDetails = () => {
                         </div>
                     </div>
 
-
                     <div className="w-full md:w-1/2 lg:w-2/3 mt-4 md:mt-0 md:ml-6">
                         <div className="mb-4">
                             <h2 className="text-2xl font-semibold text-gray-800">{apartment.Adres}</h2>
                             <div className="font-inter font-semibold text-[20px] leading-[24px] tracking-[0.5px] text-left pb-[20px]">
-                                {apartment.joylashuv || "Noma’lum joylashuv"}, {apartment.tuman || "Noma’lum tuman"}
+                                {apartment.joylashuv || "Noma'lum joylashuv"}, {apartment.tuman || "Noma'lum tuman"}
                             </div>
 
                             <div className="font-inter font-semibold text-[28px] leading-[34px] tracking-normal text-left border-b pb-[20px]">
@@ -239,13 +235,13 @@ const ApartmentDetails = () => {
                         <div className="flex flex-col gap-2">
                             {/* Dynamic Key-Value Pairs */}
                             {[
-                                { label: 'Kvartira', value: apartment.kvartl || "Noma’lum kvartira" },
-                                { label: 'Manzil', value: `${apartment.joylashuv || "Noma’lum joylashuv"}, ${apartment.tuman || "Noma’lum tuman"}` },
+                                { label: 'Kvartira', value: apartment.kvartl || "Noma'lum kvartira" },
+                                { label: 'Manzil', value: `${apartment.joylashuv || "Noma'lum joylashuv"}, ${apartment.tuman || "Noma'lum tuman"}` },
                                 { label: 'Narxi', value: `$${apartment.narxi ? apartment.narxi.toLocaleString() : "Narxi mavjud emas"}` },
-                                { label: 'Xonalar soni', value: apartment.xona_soni || "Noma’lum" },
-                                { label: 'Maydon', value: apartment.maydon ? `${apartment.maydon} m²` : "Noma’lum" },
-                                { label: 'Qavat', value: `${apartment.qavat || "Noma’lum"} / ${apartment.bino_qavati || "Noma’lum"}` },
-                                { label: 'Remont', value: apartment.remont || "Ma'lumot yo‘q" },
+                                { label: 'Xonalar soni', value: apartment.xona_soni || "Noma'lum" },
+                                { label: 'Maydon', value: apartment.maydon ? `${apartment.maydon} m²` : "Noma'lum" },
+                                { label: 'Qavat', value: `${apartment.qavat || "Noma'lum"} / ${apartment.bino_qavati || "Noma'lum"}` },
+                                { label: 'Remont', value: apartment.remont || "Ma'lumot yo'q" },
                             ].map(({ label, value }) => (
                                 <div key={label} className="flex justify-between items-center border-b border-gray-200 py-2">
                                     <span className="font-semibold text-base text-gray-500">{label}</span>
@@ -256,8 +252,6 @@ const ApartmentDetails = () => {
                     </div>
                 </div>
 
-
-                {/* Modal for Large Image */}
                 {/* Modal for Large Image */}
                 {isModalOpen && (
                     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
@@ -304,7 +298,6 @@ const ApartmentDetails = () => {
                         </div>
                     </div>
                 )}
-
 
                 {/* Description */}
                 <div className="mt-6 bg-white p-4 md:p-6 rounded-lg">
