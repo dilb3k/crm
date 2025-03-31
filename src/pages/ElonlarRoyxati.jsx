@@ -240,7 +240,7 @@ const ElonlarRoyxati = () => {
                                         <td className="h-[64px] flex items-center pl-[24px]">
                                             <img
                                                 src={apartment.image1
-                                                    ? `https://fast.uysavdo.com/uploads/${apartment.image1.replace('home_images/', '')}`
+                                                    ? `https://fast.uysavdo.com/uploads/${apartment.image1.replace('house_images/', '')}`
                                                     : "https://via.placeholder.com/40"}
                                                 alt="apartment"
                                                 className="w-10 h-10 object-cover rounded"
