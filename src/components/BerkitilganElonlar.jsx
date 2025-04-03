@@ -1,90 +1,36 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import BerkitilganElonlar from "../components/BerkitilganElonlar";
-
-// Har bir tab uchun sahifa o'lchami
-const getPageSizeForTab = (tab) => {
-    // Boshqa tablar uchun 15
-    return 15;
-};
 
 const API_BASE_URL = "https://fast.uysavdo.com";
+const PAGE_SIZE = 3; // Berkitilgan tab uchun sahifa o'lchami
 
-const ElonlarRoyxati = () => {
-    const [allApartments, setAllApartments] = useState([]);
-    const [goldApartments, setGoldApartments] = useState([]);
-    const [deletedApartments, setDeletedApartments] = useState([]);
+const BerkitilganElonlar = () => {
+    const [hiddenApartments, setHiddenApartments] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState(null);
-    const [activeTab, setActiveTab] = useState("Barchasi");
-    const [hasMore, setHasMore] = useState(true);
-    const observer = useRef();
+    const [totalPages, setTotalPages] = useState(1);
     const navigate = useNavigate();
 
-    // Get the correct API endpoint based on the active tab
-    const getApiEndpointForTab = (tab) => {
-        switch (tab) {
-            case "Barchasi":
-                return `${API_BASE_URL}/api/v1/adminka/get_house/`;
-            case "Gold e'lonlar":
-                return `${API_BASE_URL}/api/v1/adminka/gold_house/`;
-            case "O'chirilgan":
-                return `${API_BASE_URL}/api/v1/adminka/delete_house/`;
-            default:
-                return `${API_BASE_URL}/api/v1/adminka/get_house/`;
-        }
-    };
+    // Berkitilgan e'lonlar uchun API endpoint
+    const apiEndpoint = `${API_BASE_URL}/api/v1/adminka/hide_house/`;
 
-    // Aktiv tabga qarab ma'lumotlarni ko'rsatish
-    const getDisplayedApartments = () => {
-        switch (activeTab) {
-            case "Barchasi":
-                return allApartments;
-            case "Gold e'lonlar":
-                return goldApartments;
-            case "O'chirilgan":
-                return deletedApartments;
-            default:
-                return [];
-        }
-    };
-
-    // Aktiv tab uchun state setter funksiyani olish
-    const getStateSetterForTab = (tab) => {
-        switch (tab) {
-            case "Barchasi":
-                return setAllApartments;
-            case "Gold e'lonlar":
-                return setGoldApartments;
-            case "O'chirilgan":
-                return setDeletedApartments;
-            default:
-                return setAllApartments;
-        }
-    };
-
-    const fetchApartments = async (page) => {
+    const fetchHiddenApartments = async (page) => {
         const token = localStorage.getItem("token");
         if (!token) {
             console.error("Token yo'q!");
             setError("Token topilmadi");
             setLoading(false);
-            setLoadingMore(false);
             return;
         }
 
         try {
-            const apiEndpoint = getApiEndpointForTab(activeTab);
-            const pageSize = getPageSizeForTab(activeTab);
-            const stateSetter = getStateSetterForTab(activeTab);
-
-            console.log(`Fetching data for ${activeTab} with page size ${pageSize}`);
+            setLoading(true);
+            console.log(`Fetching hidden apartments with page ${page} and size ${PAGE_SIZE}`);
 
             const response = await fetch(
-                `${apiEndpoint}?page=${page}&size=${pageSize}`,
+                `${apiEndpoint}?page=${page}&size=${PAGE_SIZE}`,
                 {
                     method: "GET",
                     headers: {
@@ -108,80 +54,36 @@ const ElonlarRoyxati = () => {
             // Handle the data based on the structure
             const apartmentsData = Array.isArray(data.data) ? data.data : [];
 
-            // Ma'lumotlarni to'g'ri state-ga saqlash
-            if (page === 1) {
-                stateSetter(apartmentsData);
-            } else {
-                stateSetter(prev => [...prev, ...apartmentsData]);
-            }
-
+            setHiddenApartments(apartmentsData);
             setTotalCount(data.count || 0);
-
-            // Check if there are more pages to load
-            setHasMore(data.has_next || false);
+            setTotalPages(Math.max(1, Math.ceil((data.count || 0) / PAGE_SIZE)));
         } catch (error) {
             console.error("Fetch xatolik berdi:", error);
             setError(error.message);
         } finally {
             setLoading(false);
-            setLoadingMore(false);
         }
     };
 
-    // Tab o'zgarganda ma'lumotlarni yuklash
+    // Initial data fetch
     useEffect(() => {
-        if (activeTab === "Berkitilgan") {
-            return; // Berkitilgan tabi uchun alohida component ishlatiladi
-        }
-
-        setLoading(true);
-        setHasMore(true);
-        setCurrentPage(1);
-
-        const currentData = getDisplayedApartments();
-        if (currentData.length === 0) {
-            fetchApartments(1);
-        } else {
-            setLoading(false);
-        }
-    }, [activeTab]);
-
-    // Sahifa o'zgarganda qo'shimcha ma'lumotlar yuklash
-    useEffect(() => {
-        if (currentPage > 1 && activeTab !== "Berkitilgan") {
-            fetchApartments(currentPage);
-        }
+        fetchHiddenApartments(currentPage);
     }, [currentPage]);
-
-    // Qo'shimcha ma'lumotlarni yuklash
-    const loadMoreData = () => {
-        const pageSize = getPageSizeForTab(activeTab);
-
-        if (currentPage >= Math.ceil(totalCount / pageSize)) {
-            setHasMore(false);
-            return;
-        }
-
-        setCurrentPage(prevPage => prevPage + 1);
-        setLoadingMore(true);
-    };
-
-    // Infinite scroll uchun observer
-    const lastApartmentElementRef = useCallback(node => {
-        if (loading || loadingMore) return;
-        if (observer.current) observer.current.disconnect();
-
-        observer.current = new IntersectionObserver(entries => {
-            if (entries[0].isIntersecting && hasMore) {
-                loadMoreData();
-            }
-        }, { threshold: 0.5 });
-
-        if (node) observer.current.observe(node);
-    }, [loading, loadingMore, hasMore]);
 
     const handleRowClick = (apartmentId) => {
         navigate(`/apartment/${apartmentId}`);
+    };
+
+    const handlePreviousPage = () => {
+        if (currentPage > 1) {
+            setCurrentPage(prev => prev - 1);
+        }
+    };
+
+    const handleNextPage = () => {
+        if (currentPage < totalPages) {
+            setCurrentPage(prev => prev + 1);
+        }
     };
 
     // Rasm URL-ni formatlab berish
@@ -201,13 +103,47 @@ const ElonlarRoyxati = () => {
         return `${API_BASE_URL}/${imagePath}`;
     };
 
-    if (activeTab === "Berkitilgan") {
-        return <BerkitilganElonlar />;
-    }
+    const unhideApartment = async (apartmentId, event) => {
+        // Prevent row click event
+        event.stopPropagation();
+        
+        const token = localStorage.getItem("token");
+        if (!token) {
+            setError("Token topilmadi");
+            return;
+        }
 
-    const displayedApartments = getDisplayedApartments();
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/api/v1/adminka/unhide_house/${apartmentId}`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                    },
+                }
+            );
 
-    if (loading && currentPage === 1) {
+            if (!response.ok) {
+                throw new Error(`API xatolik qaytardi: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.status) {
+                // Refresh data after successful unhide
+                fetchHiddenApartments(currentPage);
+            } else {
+                throw new Error(data.message || "E'lonni qayta ko'rsatishda xatolik yuz berdi");
+            }
+        } catch (error) {
+            console.error("Unhide xatolik:", error);
+            setError(error.message);
+        }
+    };
+
+    if (loading && hiddenApartments.length === 0) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-100">
                 <div className="p-4 rounded-lg bg-white shadow-md">
@@ -238,8 +174,7 @@ const ElonlarRoyxati = () => {
                         <button
                             onClick={() => {
                                 setError(null);
-                                setLoading(true);
-                                fetchApartments(1);
+                                fetchHiddenApartments(currentPage);
                             }}
                             className="px-4 py-2 bg-teal-500 text-white rounded hover:bg-teal-600 transition"
                         >
@@ -268,12 +203,11 @@ const ElonlarRoyxati = () => {
                             <span
                                 key={index}
                                 onClick={() => {
-                                    setActiveTab(item);
-                                    setCurrentPage(1);
+                                    navigate("/elonlar"); // Main component ga qaytish
                                 }}
                                 className="text-sm font-bold font-inter leading-tight cursor-pointer relative py-2"
                                 style={
-                                    activeTab === item
+                                    item === "Berkitilgan"
                                         ? {
                                             background: "linear-gradient(117.4deg, #0AA3A1 0%, #B4C29E 96.03%)",
                                             WebkitBackgroundClip: "text",
@@ -285,7 +219,7 @@ const ElonlarRoyxati = () => {
                                 }
                             >
                                 {item}
-                                {activeTab === item && (
+                                {item === "Berkitilgan" && (
                                     <span
                                         className="absolute bottom-0 left-0 w-full h-0.5"
                                         style={{
@@ -315,6 +249,7 @@ const ElonlarRoyxati = () => {
                                     "Xonalar",
                                     "Maydon (m²)",
                                     "Sana",
+                                    "Amallar"
                                 ].map((header, index) => (
                                     <th
                                         key={index}
@@ -326,40 +261,42 @@ const ElonlarRoyxati = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {displayedApartments.length > 0 ? (
-                                displayedApartments.map((apartment, index) => {
-                            // Apply ref to the last element
-                                    const isLastElement = index === displayedApartments.length - 1;
-
-                                    return (
-                                        <tr
-                                            key={apartment.id}
-                                            ref={isLastElement ? lastApartmentElementRef : null}
-                                            onClick={() => handleRowClick(apartment.id)}
-                                            className="hover:bg-gray-50 cursor-pointer border-b border-gray-100"
-                                        >
-                                            <td className="h-16 p-4">
-                                                <div className="flex items-center">
-                                                    <img
-                                                        src={formatImageUrl(apartment.image1)}
-                                                        alt="apartment"
-                                                        className="w-10 h-10 object-cover rounded"
-                                                        onError={(e) => { e.target.src = "https://via.placeholder.com/40"; }}
-                                                    />
-                                                </div>
-                                            </td>
-                                            <td className="h-16 p-4">{apartment.tuman || "Noma'lum"}</td>
-                                            <td className="h-16 p-4">{apartment.kvartl || "Noma'lum"}</td>
-                                            <td className="h-16 p-4 font-semibold">${apartment.narxi?.toLocaleString() || "Noma'lum"}</td>
-                                            <td className="h-16 p-4">{apartment.xona_soni || "Noma'lum"}</td>
-                                            <td className="h-16 p-4">{apartment.maydon || "Noma'lum"} m²</td>
-                                            <td className="h-16 p-4">{new Date(apartment.created_at).toLocaleDateString("uz-UZ") || "Noma'lum"}</td>
-                                        </tr>
-                                    );
-                                })
+                            {hiddenApartments.length > 0 ? (
+                                hiddenApartments.map((apartment) => (
+                                    <tr
+                                        key={apartment.id}
+                                        onClick={() => handleRowClick(apartment.id)}
+                                        className="hover:bg-gray-50 cursor-pointer border-b border-gray-100"
+                                    >
+                                        <td className="h-16 p-4">
+                                            <div className="flex items-center">
+                                                <img
+                                                    src={formatImageUrl(apartment.image1)}
+                                                    alt="apartment"
+                                                    className="w-10 h-10 object-cover rounded"
+                                                    onError={(e) => { e.target.src = "https://via.placeholder.com/40"; }}
+                                                />
+                                            </div>
+                                        </td>
+                                        <td className="h-16 p-4">{apartment.tuman || "Noma'lum"}</td>
+                                        <td className="h-16 p-4">{apartment.kvartl || "Noma'lum"}</td>
+                                        <td className="h-16 p-4 font-semibold">${apartment.narxi?.toLocaleString() || "Noma'lum"}</td>
+                                        <td className="h-16 p-4">{apartment.xona_soni || "Noma'lum"}</td>
+                                        <td className="h-16 p-4">{apartment.maydon || "Noma'lum"} m²</td>
+                                        <td className="h-16 p-4">{new Date(apartment.created_at).toLocaleDateString("uz-UZ") || "Noma'lum"}</td>
+                                        <td className="h-16 p-4">
+                                            <button
+                                                onClick={(e) => unhideApartment(apartment.id, e)}
+                                                className="px-3 py-1.5 bg-teal-500 text-white text-xs rounded hover:bg-teal-600 transition"
+                                            >
+                                                Ko'rsatish
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
                             ) : (
                                 <tr>
-                                    <td colSpan="7" className="text-center py-8 text-gray-500">Ma'lumot topilmadi</td>
+                                    <td colSpan="8" className="text-center py-8 text-gray-500">Ma'lumot topilmadi</td>
                                 </tr>
                             )}
                         </tbody>
@@ -367,39 +304,48 @@ const ElonlarRoyxati = () => {
                 </div>
             </div>
 
-            {/* Loading indicator for infinite scroll */}
-            {loadingMore && (
-                <div className="flex justify-center items-center py-6">
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="mt-6 flex justify-between items-center">
+                    <div className="text-sm text-gray-500">
+                        Jami: {totalCount} ta berkitilgan e'lon
+                    </div>
+                    <div className="flex space-x-2 items-center">
+                        <button
+                            onClick={handlePreviousPage}
+                            disabled={currentPage === 1}
+                            className={`px-3 py-1.5 rounded ${currentPage === 1 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-teal-500 text-white hover:bg-teal-600'}`}
+                        >
+                            Oldingi
+                        </button>
+                        <div className="px-4 text-sm text-gray-700">
+                            {currentPage} / {totalPages}
+                        </div>
+                        <button
+                            onClick={handleNextPage}
+                            disabled={currentPage === totalPages}
+                            className={`px-3 py-1.5 rounded ${currentPage === totalPages ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-teal-500 text-white hover:bg-teal-600'}`}
+                        >
+                            Keyingi
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Loading indicator for pagination */}
+            {loading && hiddenApartments.length > 0 && (
+                <div className="mt-4 flex justify-center">
                     <div className="flex items-center space-x-2">
                         <svg className="animate-spin h-5 w-5 text-teal-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        <span className="text-gray-600">Yuklanmoqda...</span>
+                        <span className="text-sm text-gray-500">Yuklanmoqda...</span>
                     </div>
                 </div>
             )}
-
-            {/* End of content indicator */}
-            {!hasMore && displayedApartments.length > 0 && (
-                <div className="text-center py-6 text-gray-500">
-                    <div className="flex justify-center items-center">
-                        <div className="bg-gray-200 h-px w-16"></div>
-                        <span className="mx-3">Barcha ma'lumotlar yuklandi</span>
-                        <div className="bg-gray-200 h-px w-16"></div>
-                    </div>
-                    <div className="mt-2 text-sm text-gray-500">
-                        Jami: {totalCount} e'lon
-                    </div>
-                </div>
-            )}
-
-            {/* Pagination status indicator */}
-            <div className="text-center py-3 text-sm text-gray-500">
-                {currentPage} / {Math.max(1, Math.ceil(totalCount / getPageSizeForTab(activeTab)))} sahifa
-            </div>
         </div>
     );
 };
 
-export default ElonlarRoyxati;
+export default BerkitilganElonlar;

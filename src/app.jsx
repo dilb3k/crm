@@ -5,12 +5,12 @@ import { useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard"; // Statistika sahifasi
 import ElonlarRoyxati from "./pages/ElonlarRoyxati";
-import Foydalanuvchilar from "./pages/Foydalanuvchilar";
+import Foydalanuvchilar from "./pages/Maklerlar";
 import PrivateRoute from "./components/PrivateRoute";
 import MainPage from "./pages/MainPage";
 import ApartmentDetails from "./pages/ApartmentDetailsPage";
-import Maklerlar from "./pages/Foydalanuvchilar";
-import MaklerDetail from "./pages/MaklerDetail";
+import Maklerlar from "./pages/Maklerlar";
+
 
 const ProtectedDashboard = () => {
   const { user } = useAuth();
@@ -33,7 +33,6 @@ function App() {
             <Route path="maklerlar" element={<Maklerlar />} />
             <Route path="apartment/:id" element={<ApartmentDetails />} />
             {/* Add Makler Detail Route */}
-            <Route path="makler/:id" element={<MaklerDetail />} />
           </Route>
         </Route>
 
