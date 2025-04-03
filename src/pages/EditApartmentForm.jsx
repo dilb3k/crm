@@ -4,6 +4,9 @@ import Compressor from 'compressorjs';
 const EditApartmentForm = ({ apartment, id, onCancel, onSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [existingImages, setExistingImages] = useState([]);
+    const [newImages, setNewImages] = useState([]);
+    const [imagesToDelete, setImagesToDelete] = useState([]);
     const [formData, setFormData] = useState({
         category: "",
         tuman: "",
@@ -17,11 +20,10 @@ const EditApartmentForm = ({ apartment, id, onCancel, onSuccess }) => {
         narxi: "",
         longitude: "",
         latitude: "",
-        description: "",
-        images: []
+        description: ""
     });
 
-    // Initialize form data when apartment data is available
+    // Initialize form data and existing images when apartment data is available
     useEffect(() => {
         if (apartment) {
             setFormData({
@@ -37,32 +39,30 @@ const EditApartmentForm = ({ apartment, id, onCancel, onSuccess }) => {
                 narxi: apartment.narxi || "",
                 longitude: apartment.longitude || "",
                 latitude: apartment.latitude || "",
-                description: apartment.description || "",
-                images: []
+                description: apartment.description || ""
             });
+
+            // Collect existing images
+            const images = [];
+            for (let i = 1; i <= 5; i++) {
+                const imgKey = `image${i}`;
+                if (apartment[imgKey]) {
+                    images.push({
+                        id: i,
+                        path: apartment[imgKey],
+                        url: `https://fast.uysavdo.com/${apartment[imgKey]}`
+                    });
+                }
+            }
+            setExistingImages(images);
         }
     }, [apartment]);
 
     // Handle form input changes
     const handleInputChange = (e) => {
-        const { name, value, type, files } = e.target;
+        const { name, value, type } = e.target;
 
-        if (type === 'file') {
-            // Only take the first 5 files (API limit)
-            const fileList = Array.from(files).slice(0, 5);
-
-            // Only take small images (<3MB)
-            const filteredFiles = fileList.filter(file => file.size < 3 * 1024 * 1024);
-
-            if (filteredFiles.length < fileList.length) {
-                alert("Ba'zi rasmlar hajmi juda katta (>3MB). Ular o'chirildi.");
-            }
-
-            setFormData(prev => ({
-                ...prev,
-                images: filteredFiles
-            }));
-        } else if (type === 'number') {
+        if (type === 'number') {
             // Convert number inputs to numbers
             setFormData(prev => ({
                 ...prev,
@@ -77,14 +77,55 @@ const EditApartmentForm = ({ apartment, id, onCancel, onSuccess }) => {
         }
     };
 
+    // Handle individual image upload
+    const handleImageUpload = async (e) => {
+        const file = e.target.files[0];
+
+        if (!file) return;
+
+        // Check if total images would exceed 5
+        if (existingImages.length - imagesToDelete.length + newImages.length >= 5) {
+            alert("Maksimal 5 ta rasm yuklash mumkin!");
+            return;
+        }
+
+        // Check file size
+        if (file.size > 3 * 1024 * 1024) {
+            alert("Rasm hajmi juda katta (>3MB)");
+            return;
+        }
+
+        try {
+            // Compress the image
+            const compressedFile = await compressImage(file);
+            setNewImages(prev => [...prev, compressedFile]);
+        } catch (error) {
+            alert("Rasmni siqishda xatolik: " + error.message);
+        }
+    };
+
+    // Remove a new (not yet uploaded) image
+    const removeNewImage = (index) => {
+        setNewImages(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // Toggle an existing image for deletion
+    const toggleImageDelete = (imageId) => {
+        if (imagesToDelete.includes(imageId)) {
+            setImagesToDelete(prev => prev.filter(id => id !== imageId));
+        } else {
+            setImagesToDelete(prev => [...prev, imageId]);
+        }
+    };
+
     // Image compression function with stronger compression
     const compressImage = (file) => {
         return new Promise((resolve, reject) => {
             new Compressor(file, {
-                quality: 0.4, // Decreased quality from 0.6 to 0.4
-                maxWidth: 800, // Decreased max width from 1200 to 800
-                maxHeight: 800, // Decreased max height from 1200 to 800
-                convertSize: 1000000, // Force compression for files larger than 1MB
+                quality: 0.4,
+                maxWidth: 800,
+                maxHeight: 800,
+                convertSize: 1000000,
                 success(result) {
                     resolve(result);
                 },
@@ -101,6 +142,13 @@ const EditApartmentForm = ({ apartment, id, onCancel, onSuccess }) => {
         setError(null);
         setLoading(true);
 
+        console.log("Submitting with:", {
+            formData,
+            existingImages: existingImages.length,
+            imagesToDelete: imagesToDelete,
+            newImages: newImages.length
+        });
+
         const token = localStorage.getItem("token");
         if (!token) {
             setError("Tizimga kiring!");
@@ -111,6 +159,21 @@ const EditApartmentForm = ({ apartment, id, onCancel, onSuccess }) => {
         try {
             // Create FormData for the body
             const formDataToSend = new FormData();
+
+            // Since 'images' is required by the API, we must always include it
+            if (newImages.length > 0) {
+                // If we have new images, add them to the 'images' field
+                newImages.forEach(image => {
+                    if (image && image.size <= 1 * 1024 * 1024) {
+                        formDataToSend.append('images', image);
+                    } else {
+                        throw new Error(`Rasm juda katta. Maksimal hajm 1MB.`);
+                    }
+                });
+            } else {
+                // If no new images, add an empty file to satisfy the API requirement
+                formDataToSend.append('images', new File([], 'empty.jpg', { type: 'image/jpeg' }));
+            }
 
             // Add query parameters for other fields
             const queryParams = new URLSearchParams();
@@ -128,37 +191,40 @@ const EditApartmentForm = ({ apartment, id, onCancel, onSuccess }) => {
             queryParams.append('latitude', formData.latitude || '');
             queryParams.append('description', formData.description || '');
 
-            // Process images if any
-            if (formData.images && formData.images.length > 0) {
-                try {
-                    // Limit to 5 images
-                    const limitedImages = formData.images.slice(0, 5);
+            // Flag to preserve existing images unless explicitly deleted
+            queryParams.append('preserve_images', 'true');
 
-                    // Compress all images
-                    const compressedImages = await Promise.all(
-                        limitedImages.map(file => compressImage(file))
-                    );
+            // Add images to delete parameter if any
+            if (imagesToDelete.length > 0) {
+                imagesToDelete.forEach(imgId => {
+                    queryParams.append('delete_images', `image${imgId}`);
+                });
+            }
 
-                    // Add all images to the 'images' field - backend expects this field as File array
-                    compressedImages.forEach(image => {
-                        if (image && image.size <= 1 * 1024 * 1024) {
-                            formDataToSend.append('images', image);
-                        } else {
-                            throw new Error(`Rasm juda katta. Maksimal hajm 1MB.`);
-                        }
-                    });
-                } catch (error) {
-                    setError(error.message);
-                    setLoading(false);
-                    return;
-                }
+            // Process new images if any
+            if (newImages.length > 0) {
+                // Add new images to the 'images' field - this is the required field
+                newImages.forEach(image => {
+                    if (image && image.size <= 1 * 1024 * 1024) {
+                        formDataToSend.append('images', image);
+                    } else {
+                        throw new Error(`Rasm juda katta. Maksimal hajm 1MB.`);
+                    }
+                });
             } else {
-                // Backend requires at least one image
-                formDataToSend.append('images', new File([], 'empty.jpg', { type: 'image/jpeg' }));
+                // If no new images, we still need to provide the 'images' field
+                // Add an empty file to satisfy the API requirement
+                const emptyFile = new File([], 'empty.jpg', { type: 'image/jpeg' });
+                formDataToSend.append('images', emptyFile);
             }
 
             // Build the URL with query parameters
             const url = `https://fast.uysavdo.com/api/v1/adminka/update_ads/${id}?${queryParams.toString()}`;
+
+            console.log("Sending request to:", url);
+
+            // Log some info to help debug
+            console.log("Form data keys:", [...formDataToSend.keys()]);
 
             const response = await fetch(url, {
                 method: "PATCH",
@@ -204,6 +270,7 @@ const EditApartmentForm = ({ apartment, id, onCancel, onSuccess }) => {
             }
 
             const result = await response.json();
+            console.log("API response:", result);
 
             if (result.status) {
                 // Call the success callback with updated data
@@ -214,11 +281,15 @@ const EditApartmentForm = ({ apartment, id, onCancel, onSuccess }) => {
                 throw new Error(result.message || "Tahrirlashda xatolik yuz berdi");
             }
         } catch (error) {
+            console.error("Error during submission:", error);
             setError(error.message);
         } finally {
             setLoading(false);
         }
     };
+
+    // Get the total active images count (existing - to be deleted + new)
+    const totalActiveImages = existingImages.length - imagesToDelete.length + newImages.length;
 
     return (
         <div className="bg-white p-4 md:p-6 rounded-lg">
@@ -388,68 +459,101 @@ const EditApartmentForm = ({ apartment, id, onCancel, onSuccess }) => {
                     ></textarea>
                 </div>
 
-                {/* Replace your current file input with this code */}
+                {/* Images Section */}
                 <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Rasmlar</label>
-
-                    <div className="relative">
-                        {/* Hidden original file input that still handles the functionality */}
-                        <input
-                            type="file"
-                            name="images"
-                            onChange={handleInputChange}
-                            multiple
-                            accept="image/jpeg,image/png,image/gif"
-                            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
-                            aria-label="Rasmlarni tanlash"
-                        />
-
-                        {/* Custom styled button that visually replaces the file input - now styled like other inputs */}
-                        <div className="flex items-center px-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-gray-700 cursor-pointer">
-                            <span className="text-sm">Rasmlarni tanlash</span>
-                            <span className="text-gray-400 text-sm ml-auto">Выбрать файлы</span>
-                        </div>
+                    <div className="flex justify-between items-center mb-2">
+                        <label className="block text-sm font-medium text-gray-700">Rasmlar</label>
+                        <span className="text-sm text-gray-500">
+                            {totalActiveImages}/5 ta rasm
+                        </span>
                     </div>
 
-                    {/* File name display area - shows when files are selected */}
-                    {formData.images.length > 0 && (
-                        <div className="mt-2 p-2 bg-gray-50 text-gray-600 text-sm rounded-md border border-dashed border-gray-300">
-                            <p className="font-medium">{formData.images.length} ta fayl tanlandi</p>
-                            <ul className="mt-1 text-xs text-gray-500">
-                                {formData.images.map((file, index) => (
-                                    <li key={index} className="truncate">
-                                        {file.name} ({(file.size / (1024 * 1024)).toFixed(2)} MB)
-                                    </li>
+                    {/* Existing images */}
+                    {existingImages.length > 0 && (
+                        <div className="mb-4">
+                            <p className="text-sm font-medium text-gray-700 mb-2">Mavjud rasmlar:</p>
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                                {existingImages.map((image) => (
+                                    <div key={image.id} className={`relative border rounded-md overflow-hidden ${imagesToDelete.includes(image.id) ? 'opacity-40' : ''}`}>
+                                        <img
+                                            src={image.url}
+                                            alt={`Rasm ${image.id}`}
+                                            className="w-full h-24 object-cover"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleImageDelete(image.id)}
+                                            className={`absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center 
+                                                ${imagesToDelete.includes(image.id)
+                                                    ? 'bg-green-500 text-white'
+                                                    : 'bg-red-500 text-white'}`}
+                                        >
+                                            {imagesToDelete.includes(image.id) ? '↺' : '×'}
+                                        </button>
+                                    </div>
                                 ))}
-                            </ul>
+                            </div>
                         </div>
                     )}
 
-                    <p className="text-xs text-gray-500 mt-1">Yangi rasmlar yuklash uchun (max 5 ta rasm, har biri 3MB dan kam)</p>
-                </div>
-                {/* Show existing images if available */}
-                {apartment && (
-                    <div className="mb-4">
-                        <p className="text-sm font-medium text-gray-700 mb-2">Mavjud rasmlar:</p>
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                            {[1, 2, 3, 4, 5].map(num => {
-                                const imgKey = `image${num}`;
-                                if (apartment[imgKey]) {
-                                    return (
-                                        <div key={imgKey} className="relative">
-                                            <img
-                                                src={`https://fast.uysavdo.com/${apartment[imgKey]}`}
-                                                alt={`Rasm ${num}`}
-                                                className="w-full h-24 object-cover rounded-md"
-                                            />
+                    {/* New images */}
+                    {newImages.length > 0 && (
+                        <div className="mb-4">
+                            <p className="text-sm font-medium text-gray-700 mb-2">Yangi rasmlar:</p>
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                                {newImages.map((file, index) => (
+                                    <div key={index} className="relative border rounded-md overflow-hidden">
+                                        <img
+                                            src={URL.createObjectURL(file)}
+                                            alt={`Yangi rasm ${index + 1}`}
+                                            className="w-full h-24 object-cover"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeNewImage(index)}
+                                            className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center"
+                                        >
+                                            ×
+                                        </button>
+                                        <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate">
+                                            {(file.size / (1024 * 1024)).toFixed(2)} MB
                                         </div>
-                                    );
-                                }
-                                return null;
-                            })}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
+
+                    {/* Add new image button - disabled if already at 5 images */}
+                    {totalActiveImages < 5 && (
+                        <div className="mt-2">
+                            <label className={`flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md p-4 cursor-pointer ${totalActiveImages >= 5 ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-400'}`}>
+                                <input
+                                    type="file"
+                                    onChange={handleImageUpload}
+                                    accept="image/jpeg,image/png,image/gif"
+                                    className="hidden"
+                                    disabled={totalActiveImages >= 5}
+                                />
+                                <div className="text-center">
+                                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    <span className="mt-2 block text-sm font-medium text-gray-900">
+                                        Rasm qo'shish
+                                    </span>
+                                    <span className="mt-1 block text-xs text-gray-500">
+                                        Max 3MB
+                                    </span>
+                                </div>
+                            </label>
+                        </div>
+                    )}
+
+                    <p className="text-xs text-gray-500 mt-2">
+                        Har bir rasm 3MB dan kichik bo'lishi kerak. Maksimal 5 ta rasm.
+                    </p>
+                </div>
 
                 <div className="flex justify-end space-x-2 mt-6">
                     <button

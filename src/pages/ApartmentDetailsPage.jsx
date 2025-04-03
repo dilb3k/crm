@@ -121,7 +121,7 @@ const ApartmentDetails = () => {
     };
 
     // Function to handle hiding/showing the apartment
-    const handleHideApartment = async () => {
+    const handleToggleVisibility = async () => {
         if (!apartment) return;
 
         const token = localStorage.getItem("token");
@@ -133,9 +133,12 @@ const ApartmentDetails = () => {
         setActionLoading(true);
 
         try {
-            // Bu API har doim status_home=false ga o'zgartirib, berkitadi
+            // Determine the new status (toggle current status)
+            const newStatus = apartment.status_view !== false;
+
+            // API endpoint for updating visibility
             const response = await fetch(
-                `${API_BASE_URL}/api/v1/adminka/update-hide-homestatus/?house_id=${id}&status_home=false`,
+                `${API_BASE_URL}/api/v1/adminka/update-hide-homestatus/?house_id=${id}&status_home=${!newStatus}`,
                 {
                     method: "PUT",
                     headers: {
@@ -149,17 +152,30 @@ const ApartmentDetails = () => {
                 // Response body'ni tekshirib ko'rish
                 const errorText = await response.text();
                 console.error("API error response:", errorText);
-                throw new Error(`Berkitishda xatolik: ${response.status}`);
+                throw new Error(`${newStatus ? 'Berkitishda' : 'Ochishda'} xatolik: ${response.status}`);
             }
 
             const result = await response.json();
-            console.log("Berkitish natijasi:", result);
+            console.log(`${newStatus ? 'Berkitish' : 'Ochish'} natijasi:`, result);
 
-            // Show success notification and navigate back to listing
-            alert("Muvaffaqiyatli berkitildi!");
-            navigate('/elonlarRoyxati');
+            // Show success notification
+            alert(newStatus ? "Muvaffaqiyatli berkitildi!" : "Muvaffaqiyatli ochildi!");
+
+            // Update the apartment state with new status
+            setApartment(prev => ({
+                ...prev,
+                status_view: !newStatus
+            }));
+
+            // Optionally refresh the data from server to ensure all fields are up to date
+            fetchApartment();
+
+            // navigate back to listing only if hiding (not when unhiding)
+            if (newStatus) {
+                navigate('/elonlarRoyxati');
+            }
         } catch (error) {
-            console.error("Hide error:", error);
+            console.error("Visibility toggle error:", error);
             setError(error.message);
         } finally {
             setActionLoading(false);
@@ -285,6 +301,21 @@ const ApartmentDetails = () => {
         { name: 'Mahsulot detallari', path: `elonlarRoyxati/apartment/${id}` },
     ];
 
+    // Check if apartment is hidden to determine the button text and color
+    const isHidden = apartment.status_view === false;
+    const visibilityButtonText = isHidden ? "Ochish" : "Berkitish";
+    const visibilityButtonColor = isHidden ? "green" : "gray";
+    const visibilityButtonIcon = isHidden ? (
+        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+    ) : (
+        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+        </svg>
+    );
+
     return (
         <div className="min-h-screen flex justify-center p-4">
             <div className="bg-gray-100 rounded-lg w-full p-[24px] md:p-[24px]">
@@ -325,10 +356,15 @@ const ApartmentDetails = () => {
                                 {isEditing ? "Bekor qilish" : "Tahrirlash"}
                             </button>
                             
+                            {/* Toggle Visibility Button */}
                             <button
-                                onClick={handleHideApartment}
+                                onClick={handleToggleVisibility}
                                 disabled={actionLoading}
-                                className="flex items-center px-3 py-2 border border-gray-500 text-gray-500 font-inter font-medium text-sm h-10 w-full md:w-auto hover:bg-gray-50 transition-colors rounded-[8px]"
+                                className={`flex items-center px-3 py-2 border border-${visibilityButtonColor}-500 text-${visibilityButtonColor}-500 font-inter font-medium text-sm h-10 w-full md:w-auto hover:bg-${visibilityButtonColor}-50 transition-colors rounded-[8px]`}
+                                style={{
+                                    borderColor: isHidden ? '#10b981' : '#6b7280',
+                                    color: isHidden ? '#10b981' : '#6b7280'
+                                }}
                             >
                                 {actionLoading ? (
                                     <>
@@ -340,14 +376,12 @@ const ApartmentDetails = () => {
                                     </>
                                 ) : (
                                     <>
-                                        {/* SVG o'rnida base64 encoded SVG icon ishlatish */}
-                                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                        </svg>
-                                        Berkitish
+                                            {visibilityButtonIcon}
+                                            {visibilityButtonText}
                                     </>
                                 )}
                             </button>
+
                             <button
                                 className="flex items-center px-3 py-2 border border-red-500 text-red-500 font-inter font-medium text-sm h-10 w-full md:w-auto hover:bg-gray-50 transition-colors rounded-[8px]"
                             >
@@ -432,12 +466,21 @@ const ApartmentDetails = () => {
                                         { label: 'Maydon', value: apartment.maydon ? `${apartment.maydon} m²` : "Noma'lum" },
                                         { label: 'Qavat', value: `${apartment.qavat || "Noma'lum"} / ${apartment.bino_qavati || "Noma'lum"}` },
                                         { label: 'Remont', value: apartment.remont || "Ma'lumot yo'q" },
-                                        // Add status here to show if it's hidden or not
-                                        { label: 'Holati', value: apartment.status_view === false ? "Berkitilgan" : "Ko'rinadi" },
+                                            // Status with styled text based on visibility
+                                            {
+                                                label: 'Holati',
+                                                value: (
+                                                    <span style={{ color: isHidden ? '#ef4444' : '#10b981' }}>
+                                                        {isHidden ? "Berkitilgan" : "Ko'rinadi"}
+                                                    </span>
+                                                )
+                                            },
                                     ].map(({ label, value }) => (
                                         <div key={label} className="flex justify-between items-center border-b border-gray-200 py-2">
                                             <span className="font-semibold text-base text-gray-500">{label}</span>
-                                            <span className="text-base text-gray-900">{value}</span>
+                                            <span className="text-base text-gray-900">
+                                                {typeof value === 'object' ? value : value}
+                                            </span>
                                         </div>
                                     ))}
                                 </div>
