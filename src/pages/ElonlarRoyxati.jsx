@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import BerkitilganElonlar from "../components/BerkitilganElonlar";
 
 // Har bir tab uchun sahifa o'lchami
 const getPageSizeForTab = (tab) => {
@@ -10,9 +9,13 @@ const getPageSizeForTab = (tab) => {
 
 const API_BASE_URL = "https://fast.uysavdo.com";
 
+// Lokal placeholder rasm (base64 formatida), tashqi serverga bog'liq bo'lmaslik uchun
+const DEFAULT_IMAGE = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjZTJlOGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk0YTNiOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk4vQTwvdGV4dD48L3N2Zz4=";
+
 const ElonlarRoyxati = () => {
     const [allApartments, setAllApartments] = useState([]);
     const [goldApartments, setGoldApartments] = useState([]);
+    const [hiddenApartments, setHiddenApartments] = useState([]);
     const [deletedApartments, setDeletedApartments] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
@@ -23,6 +26,13 @@ const ElonlarRoyxati = () => {
     const [hasMore, setHasMore] = useState(true);
     const observer = useRef();
     const navigate = useNavigate();
+    const previousTab = useRef("Barchasi");
+    
+    // Ma'lumotlarni olish kechiktirilgan vaqtni nazorat qilish
+    const fetchTimeoutRef = useRef(null);
+    
+    // So'ngi so'rovni kuzatish
+    const lastFetchTimeRef = useRef(0);
 
     // Get the correct API endpoint based on the active tab
     const getApiEndpointForTab = (tab) => {
@@ -31,6 +41,8 @@ const ElonlarRoyxati = () => {
                 return `${API_BASE_URL}/api/v1/adminka/get_house/`;
             case "Gold e'lonlar":
                 return `${API_BASE_URL}/api/v1/adminka/gold_house/`;
+            case "Berkitilgan":
+                return `${API_BASE_URL}/api/v1/adminka/hide_house/`;
             case "O'chirilgan":
                 return `${API_BASE_URL}/api/v1/adminka/delete_house/`;
             default:
@@ -45,6 +57,8 @@ const ElonlarRoyxati = () => {
                 return allApartments;
             case "Gold e'lonlar":
                 return goldApartments;
+            case "Berkitilgan":
+                return hiddenApartments;
             case "O'chirilgan":
                 return deletedApartments;
             default:
@@ -59,6 +73,8 @@ const ElonlarRoyxati = () => {
                 return setAllApartments;
             case "Gold e'lonlar":
                 return setGoldApartments;
+            case "Berkitilgan":
+                return setHiddenApartments;
             case "O'chirilgan":
                 return setDeletedApartments;
             default:
@@ -66,15 +82,41 @@ const ElonlarRoyxati = () => {
         }
     };
 
-    const fetchApartments = async (page) => {
+    // Token olish va xatoliklarni tekshirish
+    const getToken = () => {
         const token = localStorage.getItem("token");
         if (!token) {
             console.error("Token yo'q!");
             setError("Token topilmadi");
             setLoading(false);
             setLoadingMore(false);
+            
+            // Token yo'q bo'lsa login sahifasiga yo'naltirish
+            navigate("/login");
+            return null;
+        }
+        return token;
+    };
+
+    const fetchApartments = async (page) => {
+        // So'rovlar orasidagi minimal vaqt 500ms (throttling)
+        const now = Date.now();
+        const timeSinceLastFetch = now - lastFetchTimeRef.current;
+        
+        if (timeSinceLastFetch < 500) {
+            // Agar so'nggi so'rovdan kam vaqt o'tgan bo'lsa, kechiktirish
+            clearTimeout(fetchTimeoutRef.current);
+            fetchTimeoutRef.current = setTimeout(() => {
+                fetchApartments(page);
+            }, 500 - timeSinceLastFetch);
             return;
         }
+        
+        // So'nggi so'rov vaqtini yangilash
+        lastFetchTimeRef.current = now;
+        
+        const token = getToken();
+        if (!token) return;
 
         try {
             const apiEndpoint = getApiEndpointForTab(activeTab);
@@ -95,6 +137,12 @@ const ElonlarRoyxati = () => {
             );
 
             if (!response.ok) {
+                // Agar token muammosi bo'lsa (401 yoki 403)
+                if (response.status === 401 || response.status === 403) {
+                    localStorage.removeItem("token"); // Tokeni o'chirish
+                    navigate("/login"); // Login sahifasiga yo'naltirish
+                    throw new Error("Token xatoligi. Qayta login qiling");
+                }
                 throw new Error(`API xatolik qaytardi: ${response.status}`);
             }
 
@@ -130,10 +178,15 @@ const ElonlarRoyxati = () => {
 
     // Tab o'zgarganda ma'lumotlarni yuklash
     useEffect(() => {
-        if (activeTab === "Berkitilgan") {
-            return; // Berkitilgan tabi uchun alohida component ishlatiladi
-        }
-
+        // Tokeni tekshirish
+        const token = getToken();
+        if (!token) return;
+        
+        // Oldingi so'rovlarni bekor qilish
+        clearTimeout(fetchTimeoutRef.current);
+        
+        previousTab.current = activeTab;
+        
         setLoading(true);
         setHasMore(true);
         setCurrentPage(1);
@@ -144,17 +197,24 @@ const ElonlarRoyxati = () => {
         } else {
             setLoading(false);
         }
+        
+        // Component unmount bo'lganda timeout tozalash
+        return () => {
+            clearTimeout(fetchTimeoutRef.current);
+        };
     }, [activeTab]);
 
     // Sahifa o'zgarganda qo'shimcha ma'lumotlar yuklash
     useEffect(() => {
-        if (currentPage > 1 && activeTab !== "Berkitilgan") {
+        if (currentPage > 1) {
             fetchApartments(currentPage);
         }
     }, [currentPage]);
 
     // Qo'shimcha ma'lumotlarni yuklash
-    const loadMoreData = () => {
+    const loadMoreData = useCallback(() => {
+        if (loadingMore) return;
+        
         const pageSize = getPageSizeForTab(activeTab);
 
         if (currentPage >= Math.ceil(totalCount / pageSize)) {
@@ -164,7 +224,7 @@ const ElonlarRoyxati = () => {
 
         setCurrentPage(prevPage => prevPage + 1);
         setLoadingMore(true);
-    };
+    }, [activeTab, currentPage, totalCount, loadingMore]);
 
     // Infinite scroll uchun observer
     const lastApartmentElementRef = useCallback(node => {
@@ -178,7 +238,7 @@ const ElonlarRoyxati = () => {
         }, { threshold: 0.5 });
 
         if (node) observer.current.observe(node);
-    }, [loading, loadingMore, hasMore]);
+    }, [loading, loadingMore, hasMore, loadMoreData]);
 
     const handleRowClick = (apartmentId) => {
         navigate(`/apartment/${apartmentId}`);
@@ -186,26 +246,25 @@ const ElonlarRoyxati = () => {
 
     // Rasm URL-ni formatlab berish
     const formatImageUrl = (imagePath) => {
-        if (!imagePath) return "https://via.placeholder.com/40";
-
-        // Handle different image path formats
-        if (imagePath.startsWith('uploads/house_images/')) {
-            return `${API_BASE_URL}/${imagePath}`;
-        } else if (imagePath.startsWith('house_images/')) {
-            return `${API_BASE_URL}/uploads/${imagePath}`;
-        } else if (imagePath.startsWith('noturar_images/') ||
-            imagePath.startsWith('uploads/')) {
-            return `${API_BASE_URL}/${imagePath}`;
+        if (!imagePath) return DEFAULT_IMAGE;
+        
+        try {
+            return `${API_BASE_URL}/image/${imagePath}`;
+        } catch (error) {
+            console.error("Rasm URL formatida xatolik:", error);
+            return DEFAULT_IMAGE;
         }
-
-        return `${API_BASE_URL}/${imagePath}`;
     };
 
-    if (activeTab === "Berkitilgan") {
-        return <BerkitilganElonlar />;
-    }
-
     const displayedApartments = getDisplayedApartments();
+
+    // Tab bosilganda yangi tabga o'tish
+    const handleTabClick = (tabName) => {
+        if (activeTab !== tabName) {
+            setActiveTab(tabName);
+            setCurrentPage(1);
+        }
+    };
 
     if (loading && currentPage === 1) {
         return (
@@ -239,7 +298,8 @@ const ElonlarRoyxati = () => {
                             onClick={() => {
                                 setError(null);
                                 setLoading(true);
-                                fetchApartments(1);
+                                const token = getToken();
+                                if (token) fetchApartments(1);
                             }}
                             className="px-4 py-2 bg-teal-500 text-white rounded hover:bg-teal-600 transition"
                         >
@@ -250,6 +310,9 @@ const ElonlarRoyxati = () => {
             </div>
         );
     }
+
+    // Tablarni qayta tartiblash - Berkitilgan va Gold e'lonlar o'rinlarini almashtirish
+    const tabOrder = ["Barchasi", "Berkitilgan", "Gold e'lonlar", "O'chirilgan"];
 
     return (
         <div className="bg-gray-100 min-h-screen px-4 pb-4">
@@ -263,41 +326,67 @@ const ElonlarRoyxati = () => {
             {/* Navigation Tabs with Gradient Text */}
             <div className="mt-4 flex items-center bg-gray-100 border-b border-gray-300 relative">
                 <nav className="flex space-x-6 w-full">
-                    {["Barchasi", "Gold e'lonlar", "Berkitilgan", "O'chirilgan"].map(
-                        (item, index) => (
-                            <span
-                                key={index}
-                                onClick={() => {
-                                    setActiveTab(item);
-                                    setCurrentPage(1);
-                                }}
-                                className="text-sm font-bold font-inter leading-tight cursor-pointer relative py-2"
-                                style={
-                                    activeTab === item
-                                        ? {
-                                            background: "linear-gradient(117.4deg, #0AA3A1 0%, #B4C29E 96.03%)",
-                                            WebkitBackgroundClip: "text",
-                                            WebkitTextFillColor: "transparent",
-                                        }
-                                        : {
-                                            color: "rgba(102, 112, 133, 1)",
-                                        }
-                                }
-                            >
-                                {item}
-                                {activeTab === item && (
-                                    <span
-                                        className="absolute bottom-0 left-0 w-full h-0.5"
-                                        style={{
-                                            bottom: "-1px",
-                                            zIndex: 10,
-                                            background: "linear-gradient(117.4deg, #0AA3A1 0%, #B4C29E 96.03%)",
-                                        }}
-                                    />
-                                )}
-                            </span>
-                        )
-                    )}
+                    {tabOrder.map((item, index) => {
+                        // Fixed tab rendering logic
+                        if (item === "Gold e'lonlar" && activeTab === "O'chirilgan") {
+                            // Gold e'lonlar completely disabled in O'chirilgan tab
+                            return (
+                                <button
+                                    key={index}
+                                    disabled
+                                    className="text-sm font-bold font-inter leading-tight relative py-2 flex items-center cursor-not-allowed opacity-50 text-gray-400"
+                                >
+                                    <svg 
+                                        xmlns="http://www.w3.org/2000/svg" 
+                                        className="h-4 w-4 mr-1" 
+                                        fill="none" 
+                                        viewBox="0 0 24 24" 
+                                        stroke="currentColor"
+                                    >
+                                        <path 
+                                            strokeLinecap="round" 
+                                            strokeLinejoin="round" 
+                                            strokeWidth={2} 
+                                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" 
+                                        />
+                                    </svg>
+                                    {item}
+                                </button>
+                            );
+                        } else {
+                            // Normal tab behavior
+                            return (
+                                <span
+                                    key={index}
+                                    onClick={() => handleTabClick(item)}
+                                    className="text-sm font-bold font-inter leading-tight relative py-2 cursor-pointer"
+                                    style={
+                                        activeTab === item
+                                            ? {
+                                                background: "linear-gradient(117.4deg, #0AA3A1 0%, #B4C29E 96.03%)",
+                                                WebkitBackgroundClip: "text",
+                                                WebkitTextFillColor: "transparent",
+                                            }
+                                            : {
+                                                color: "rgba(102, 112, 133, 1)",
+                                            }
+                                    }
+                                >
+                                    {item}
+                                    {activeTab === item && (
+                                        <span
+                                            className="absolute bottom-0 left-0 w-full h-0.5"
+                                            style={{
+                                                bottom: "-1px",
+                                                zIndex: 10,
+                                                background: "linear-gradient(117.4deg, #0AA3A1 0%, #B4C29E 96.03%)",
+                                            }}
+                                        />
+                                    )}
+                                </span>
+                            );
+                        }
+                    })}
                 </nav>
             </div>
 
@@ -328,7 +417,7 @@ const ElonlarRoyxati = () => {
                         <tbody>
                             {displayedApartments.length > 0 ? (
                                 displayedApartments.map((apartment, index) => {
-                            // Apply ref to the last element
+                                    // Apply ref to the last element
                                     const isLastElement = index === displayedApartments.length - 1;
 
                                     return (
@@ -344,7 +433,8 @@ const ElonlarRoyxati = () => {
                                                         src={formatImageUrl(apartment.image1)}
                                                         alt="apartment"
                                                         className="w-10 h-10 object-cover rounded"
-                                                        onError={(e) => { e.target.src = "https://via.placeholder.com/40"; }}
+                                                        onError={(e) => { e.target.src = DEFAULT_IMAGE; }}
+                                                        loading="lazy"
                                                     />
                                                 </div>
                                             </td>
@@ -353,7 +443,9 @@ const ElonlarRoyxati = () => {
                                             <td className="h-16 p-4 font-semibold">${apartment.narxi?.toLocaleString() || "Noma'lum"}</td>
                                             <td className="h-16 p-4">{apartment.xona_soni || "Noma'lum"}</td>
                                             <td className="h-16 p-4">{apartment.maydon || "Noma'lum"} m²</td>
-                                            <td className="h-16 p-4">{new Date(apartment.created_at).toLocaleDateString("uz-UZ") || "Noma'lum"}</td>
+                                            <td className="h-16 p-4">
+                                                {apartment.created_at ? new Date(apartment.created_at).toLocaleDateString("uz-UZ") : "Noma'lum"}
+                                            </td>
                                         </tr>
                                     );
                                 })

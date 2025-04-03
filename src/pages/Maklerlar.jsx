@@ -15,6 +15,8 @@ const Maklerlar = () => {
     const [hasChanges, setHasChanges] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [processingStatus, setProcessingStatus] = useState("");
+    // YANGI: oxirgi almashish vaqtini saqlash uchun
+    const [lastSwapTime, setLastSwapTime] = useState(0);
 
     // Refs for scroll management
     const containerRef = useRef(null);
@@ -56,6 +58,29 @@ const Maklerlar = () => {
         box-shadow: 0 8px 12px -2px rgba(0, 0, 0, 0.1);
         border: 2px solid #14b8a6;
     }
+    
+    /* YANGI: Avtomatik almashish uchun animatsiyalar */
+    @keyframes swap-down {
+        0% { transform: translateY(0); }
+        50% { transform: translateY(50px); opacity: 0.7; }
+        100% { transform: translateY(0); }
+    }
+
+    @keyframes swap-up {
+        0% { transform: translateY(0); }
+        50% { transform: translateY(-50px); opacity: 0.7; }
+        100% { transform: translateY(0); }
+    }
+
+    .swap-down {
+        animation: swap-down 0.3s ease;
+        border-bottom: 2px solid #14b8a6;
+    }
+
+    .swap-up {
+        animation: swap-up 0.3s ease;
+        border-top: 2px solid #14b8a6;
+    }
     `;
 
     // Add drag-drop styles to document
@@ -74,27 +99,43 @@ const Maklerlar = () => {
         };
     }, []);
 
-    // Auto-scroll function during drag
+    // Advanced auto-scroll function
     const autoScroll = useCallback((clientY) => {
         if (!containerRef.current) return;
 
         const container = containerRef.current;
         const containerRect = container.getBoundingClientRect();
-        const viewportHeight = window.innerHeight;
 
-        // Define scroll threshold (100px from top or bottom)
-        const topThreshold = containerRect.top + 500;
-        const bottomThreshold = viewportHeight - 500;
+        // Define scroll zones
+        const SCROLL_ZONE_HEIGHT = 100;
+        const topScrollZone = containerRect.top + SCROLL_ZONE_HEIGHT;
+        const bottomScrollZone = containerRect.bottom - SCROLL_ZONE_HEIGHT;
 
         let scrollSpeed = 0;
 
-        // Determine scroll speed and direction
-        if (clientY < topThreshold) {
-            // Scrolling up
-            scrollSpeed = -20 * ((topThreshold - clientY) / 100);
-        } else if (clientY > bottomThreshold) {
-            // Scrolling down
-            scrollSpeed = 20 * ((clientY - bottomThreshold) / 100);
+        // Upward scrolling
+        if (clientY < topScrollZone) {
+            const distanceFromTop = topScrollZone - clientY;
+            scrollSpeed = -Math.pow(distanceFromTop / 10, 2.5);
+        }
+        // Downward scrolling
+        else if (clientY > bottomScrollZone) {
+            const distanceFromBottom = clientY - bottomScrollZone;
+            scrollSpeed = Math.pow(distanceFromBottom / 10, 2.5);
+        }
+
+        // Limit scroll speed
+        const MAX_SCROLL_SPEED = 50;
+        scrollSpeed = Math.sign(scrollSpeed) * Math.min(Math.abs(scrollSpeed), MAX_SCROLL_SPEED);
+
+        // Prevent scrolling beyond container limits
+        const currentScroll = container.scrollTop;
+        const maxScroll = container.scrollHeight - container.clientHeight;
+
+        if (currentScroll + scrollSpeed < 0) {
+            scrollSpeed = -currentScroll;
+        } else if (currentScroll + scrollSpeed > maxScroll) {
+            scrollSpeed = maxScroll - currentScroll;
         }
 
         // Apply scrolling
@@ -102,6 +143,52 @@ const Maklerlar = () => {
             container.scrollTop += scrollSpeed;
         }
     }, []);
+    // YANGI: Elementlarni almashtirib qo'yish uchun funksiya
+    const swapMaklers = useCallback((index1, index2) => {
+        // Hozirgi vaqtni olish
+        const now = Date.now();
+
+        // Agar oxirgi almashishdan 300ms o'tmagan bo'lsa, almashishni bajarmaymiz
+        // Bu ko'p marta ketma-ket almashishlarni oldini oladi
+        if (now - lastSwapTime < 300) return;
+
+        // Yangi vaqtni saqlash
+        setLastSwapTime(now);
+
+        // Elementlarni almashtiramiz
+        const newMaklers = [...maklers];
+        const temp = newMaklers[index1];
+        newMaklers[index1] = newMaklers[index2];
+        newMaklers[index2] = temp;
+
+        // Maklerlarni yangilash
+        setMaklers(newMaklers);
+
+        // O'zgarishlar borligini belgilash
+        setHasChanges(true);
+
+        // Animatsiya qo'shish - tepadagi element pastga, pastdagi yuqoriga
+        const element1 = document.querySelector(`[data-index="${index1}"]`);
+        const element2 = document.querySelector(`[data-index="${index2}"]`);
+
+        if (index1 > index2) {
+            // Element1 tepaga ko'tariladi
+            element1?.classList.add('swap-up');
+            // Element2 pastga tushadi
+            element2?.classList.add('swap-down');
+        } else {
+            // Element1 pastga tushadi
+            element1?.classList.add('swap-down');
+            // Element2 tepaga ko'tariladi
+            element2?.classList.add('swap-up');
+        }
+
+        // Animatsiyalarni tozalash
+        setTimeout(() => {
+            element1?.classList.remove('swap-up', 'swap-down');
+            element2?.classList.remove('swap-up', 'swap-down');
+        }, 300);
+    }, [maklers, lastSwapTime]);
 
     // Rest of the existing useEffect and other methods from the second file...
     useEffect(() => {
@@ -352,48 +439,93 @@ const Maklerlar = () => {
         setDraggedOverItem(null);
     };
 
+    // O'ZGARTIRILGAN: DragOver handleri - boshqa makler ustida turgan paytda ular o'rnini almashtiramiz
     const handleDragOver = useCallback((e, index) => {
-        e.preventDefault(); // Allow dropping
-        e.stopPropagation(); // Prevent parent handlers
+        e.preventDefault();
+        e.stopPropagation();
 
-        // Update auto-scroll with current mouse position
-        autoScroll(e.clientY);
+        // Prevent dropping on self
+        if (draggedItem === index) return;
 
-        if (draggedItem === index) return; // Don't allow dropping on self
+        const container = containerRef.current;
+        if (!container) return;
 
-        // More sensitive drag over handling with lower throttling threshold
-        if (!e.currentTarget.dataset.lastDragOver ||
-            Date.now() - parseInt(e.currentTarget.dataset.lastDragOver) > 30) { // Reduced from 50 to 30
+        const containerRect = container.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const mouseY = e.clientY;
 
-            e.currentTarget.dataset.lastDragOver = Date.now().toString();
+        // Scroll calculation with more aggressive downward scroll
+        let scrollSpeed = 0;
+        const SCROLL_ZONE_HEIGHT = 100; // Scroll activation zone
+        const bottomScrollZone = viewportHeight - SCROLL_ZONE_HEIGHT;
 
-            // Drag over visual indicators
-            const rect = e.currentTarget.getBoundingClientRect();
-            const mouseY = e.clientY;
-            const threshold = rect.top + rect.height / 2;
+        // Hyper-aggressive downward scrolling
+        if (mouseY > bottomScrollZone) {
+            const distanceFromBottom = mouseY - bottomScrollZone;
+            // Exponential scroll speed for lightning-fast downward movement
+            scrollSpeed = Math.pow(distanceFromBottom / 10, 3) * 3;
 
-            // Remove existing indicators
-            document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
-                if (el !== e.currentTarget) {
-                    el.classList.remove('drag-over-top', 'drag-over-bottom');
-                }
-            });
+            // Limit maximum scroll speed
+            scrollSpeed = Math.min(scrollSpeed, 200);
 
-            // Add new indicator based on position
-            if (mouseY < threshold) {
-                e.currentTarget.classList.remove('drag-over-bottom');
-                e.currentTarget.classList.add('drag-over-top');
-                setDraggedOverItem({ index, position: 'top' });
-            } else {
-                e.currentTarget.classList.remove('drag-over-top');
-                e.currentTarget.classList.add('drag-over-bottom');
-                setDraggedOverItem({ index, position: 'bottom' });
+            // Prevent scrolling beyond container limits
+            const currentScroll = container.scrollTop;
+            const maxScroll = container.scrollHeight - container.clientHeight;
+
+            if (currentScroll + scrollSpeed > maxScroll) {
+                scrollSpeed = maxScroll - currentScroll;
             }
+
+            // Apply scrolling
+            container.scrollTop += scrollSpeed;
         }
 
-        // Set dataTransfer properties
+        // Track last drag time to prevent too frequent updates
+        const now = Date.now();
+        const DRAG_THROTTLE_DELAY = 50;
+
+        // Intelligent swap mechanism with reduced frequency
+        if (!lastSwapTime || now - lastSwapTime >= DRAG_THROTTLE_DELAY) {
+            // Create a copy of maklers to avoid direct mutation
+            const newMaklers = [...maklers];
+
+            // Remove dragged item from original position
+            const [draggedMakler] = newMaklers.splice(draggedItem, 1);
+
+            // Insert at new position
+            newMaklers.splice(index, 0, draggedMakler);
+
+            // Update state with new order
+            setMaklers(newMaklers);
+            setDraggedItem(index);
+            setLastSwapTime(now);
+            setHasChanges(true);
+        }
+
+        // Visual indicators
+        const rect = e.currentTarget.getBoundingClientRect();
+        const mouseYInElement = e.clientY;
+        const threshold = rect.top + rect.height / 2;
+
+        // Clear previous indicators
+        document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
+            el.classList.remove('drag-over-top', 'drag-over-bottom');
+        });
+
+        // Add new indicator based on precise mouse position
+        if (mouseYInElement < threshold) {
+            e.currentTarget.classList.remove('drag-over-bottom');
+            e.currentTarget.classList.add('drag-over-top');
+            setDraggedOverItem({ index, position: 'top' });
+        } else {
+            e.currentTarget.classList.remove('drag-over-top');
+            e.currentTarget.classList.add('drag-over-bottom');
+            setDraggedOverItem({ index, position: 'bottom' });
+        }
+
+        // Set drag effect
         e.dataTransfer.dropEffect = 'move';
-    }, [draggedItem, autoScroll]);
+    }, [draggedItem, maklers, lastSwapTime]);
 
     const handleDragEnter = (e) => {
         e.preventDefault();
@@ -411,6 +543,7 @@ const Maklerlar = () => {
         }
     };
 
+    // O'ZGARTIRILGAN: Drop handler - elementlar allaqachon almashinib bo'lgani uchun, biz faqat visual effektlarni tozalaymiz
     const handleDrop = (e, index) => {
         e.preventDefault();
         e.stopPropagation();
@@ -418,34 +551,9 @@ const Maklerlar = () => {
         // Remove visual indicators
         e.currentTarget.classList.remove('bg-gray-50', 'drag-over-top', 'drag-over-bottom');
 
-        if (draggedItem === index) return; // Don't allow dropping on self
-
-        // Make a copy of the current maklers array
-        const newMaklers = [...maklers];
-
-        // Remove the dragged item from its original position
-        const [draggedMakler] = newMaklers.splice(draggedItem, 1);
-
-        // Calculate insert position based on whether we're dropping above or below
-        let insertPosition = index;
-        if (draggedItem < index && draggedOverItem?.position === 'top') {
-            insertPosition--;
-        } else if (draggedItem > index && draggedOverItem?.position === 'bottom') {
-            insertPosition++;
-        }
-
-        // Adjust if out of bounds
-        insertPosition = Math.max(0, Math.min(insertPosition, newMaklers.length));
-
-        // Insert the dragged item at its new position
-        newMaklers.splice(insertPosition, 0, draggedMakler);
-
-        // Log the move with more details
-        console.log(`Makler "${draggedMakler.name}" (ID: ${draggedMakler.id}) ${draggedItem + 1}-pozitsiyadan ${insertPosition + 1}-pozitsiyaga ko'chirildi`);
-
-        // Add smooth animation to the moved item using class
+        // Highlight effect qo'shish
         setTimeout(() => {
-            const movedItem = document.querySelector(`[data-makler-id="${draggedMakler.id}"]`);
+            const movedItem = document.querySelector(`[data-index="${index}"]`);
             if (movedItem) {
                 movedItem.classList.add('highlight-moved');
                 setTimeout(() => {
@@ -453,12 +561,6 @@ const Maklerlar = () => {
                 }, 1000);
             }
         }, 50);
-
-        // Update the state with the new order
-        setMaklers(newMaklers);
-
-        // Check if the order has changed compared to the original
-        setHasChanges(checkForChanges(newMaklers));
     };
 
     // Loading state rendering
@@ -516,7 +618,7 @@ const Maklerlar = () => {
     return (
         <div
             ref={containerRef}
-            className="bg-gray-50 min-h-screen pb-10 overflow-hidden"
+            className="bg-gray-50 min-h-screen pb-10 overflow-auto" // O'ZGARTIRILGAN: overflow-hidden → overflow-auto
         >
             <div className="max-w-2xl mx-auto px-4 pt-6">
                 <div className="flex justify-between items-center mb-6">
@@ -575,7 +677,7 @@ const Maklerlar = () => {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block mr-1 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Maklerlarni tartibini o'zgartirish uchun ularni yuqoriga yoki pastga sudrab qo'ying. O'zgarishlarni saqlash uchun "O'zgarishlarni saqlash" tugmasini bosing.
+                    Maklerlarni tartibini o'zgartirish uchun ularni yuqoriga yoki pastga sudrab qo'ying. Siz biror maklerni ustiga sichqonchani keltirsangiz, ular avtomatik o'rin almashadi. O'zgarishlarni saqlash uchun "O'zgarishlarni saqlash" tugmasini bosing.
                 </p>
 
                 <div className="space-y-4">
@@ -592,6 +694,8 @@ const Maklerlar = () => {
                             onDragEnter={handleDragEnter}
                             onDragLeave={handleDragLeave}
                             onDrop={handleDrop}
+                            data-makler-id={makler.id}
+                            data-index={index}
                         />
                     ))}
                 </div>
