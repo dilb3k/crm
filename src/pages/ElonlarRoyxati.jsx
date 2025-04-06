@@ -27,10 +27,10 @@ const ElonlarRoyxati = () => {
     const observer = useRef();
     const navigate = useNavigate();
     const previousTab = useRef("Barchasi");
-    
+
     // Ma'lumotlarni olish kechiktirilgan vaqtni nazorat qilish
     const fetchTimeoutRef = useRef(null);
-    
+
     // So'ngi so'rovni kuzatish
     const lastFetchTimeRef = useRef(0);
 
@@ -90,7 +90,7 @@ const ElonlarRoyxati = () => {
             setError("Token topilmadi");
             setLoading(false);
             setLoadingMore(false);
-            
+
             // Token yo'q bo'lsa login sahifasiga yo'naltirish
             navigate("/login");
             return null;
@@ -102,7 +102,7 @@ const ElonlarRoyxati = () => {
         // So'rovlar orasidagi minimal vaqt 500ms (throttling)
         const now = Date.now();
         const timeSinceLastFetch = now - lastFetchTimeRef.current;
-        
+
         if (timeSinceLastFetch < 500) {
             // Agar so'nggi so'rovdan kam vaqt o'tgan bo'lsa, kechiktirish
             clearTimeout(fetchTimeoutRef.current);
@@ -111,10 +111,10 @@ const ElonlarRoyxati = () => {
             }, 500 - timeSinceLastFetch);
             return;
         }
-        
+
         // So'nggi so'rov vaqtini yangilash
         lastFetchTimeRef.current = now;
-        
+
         const token = getToken();
         if (!token) return;
 
@@ -181,12 +181,12 @@ const ElonlarRoyxati = () => {
         // Tokeni tekshirish
         const token = getToken();
         if (!token) return;
-        
+
         // Oldingi so'rovlarni bekor qilish
         clearTimeout(fetchTimeoutRef.current);
-        
+
         previousTab.current = activeTab;
-        
+
         setLoading(true);
         setHasMore(true);
         setCurrentPage(1);
@@ -197,7 +197,7 @@ const ElonlarRoyxati = () => {
         } else {
             setLoading(false);
         }
-        
+
         // Component unmount bo'lganda timeout tozalash
         return () => {
             clearTimeout(fetchTimeoutRef.current);
@@ -214,7 +214,7 @@ const ElonlarRoyxati = () => {
     // Qo'shimcha ma'lumotlarni yuklash
     const loadMoreData = useCallback(() => {
         if (loadingMore) return;
-        
+
         const pageSize = getPageSizeForTab(activeTab);
 
         if (currentPage >= Math.ceil(totalCount / pageSize)) {
@@ -247,7 +247,7 @@ const ElonlarRoyxati = () => {
     // Rasm URL-ni formatlab berish
     const formatImageUrl = (imagePath) => {
         if (!imagePath) return DEFAULT_IMAGE;
-        
+
         try {
             return `${API_BASE_URL}/image/${imagePath}`;
         } catch (error) {
@@ -317,10 +317,16 @@ const ElonlarRoyxati = () => {
     return (
         <div className="bg-gray-100 min-h-screen px-4 pb-4">
             {/* Header */}
-            <div className="mt-4 pt-4 flex items-center">
+            <div className="mt-4 pt-4 flex items-center justify-between">
                 <h1 className="font-inter font-medium text-2xl leading-8 text-gray-900">
                     E'lonlar ro'yxati
                 </h1>
+                <button
+                    onClick={() => navigate("/add-apartment")}
+                    className="bg-gradient-to-r from-teal-500 to-green-400 text-white px-6 py-2 rounded-lg font-medium"
+                >
+                    E'lon qo'shish+
+                </button>
             </div>
 
             {/* Navigation Tabs with Gradient Text */}
@@ -336,18 +342,18 @@ const ElonlarRoyxati = () => {
                                     disabled
                                     className="text-sm font-bold font-inter leading-tight relative py-2 flex items-center cursor-not-allowed opacity-50 text-gray-400"
                                 >
-                                    <svg 
-                                        xmlns="http://www.w3.org/2000/svg" 
-                                        className="h-4 w-4 mr-1" 
-                                        fill="none" 
-                                        viewBox="0 0 24 24" 
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        className="h-4 w-4 mr-1"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
                                         stroke="currentColor"
                                     >
-                                        <path 
-                                            strokeLinecap="round" 
-                                            strokeLinejoin="round" 
-                                            strokeWidth={2} 
-                                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" 
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                                         />
                                     </svg>
                                     {item}
