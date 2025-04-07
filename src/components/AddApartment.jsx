@@ -1,10 +1,11 @@
-import React, { useState, useRef,useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Compressor from 'compressorjs';
 
 const API_BASE_URL = "https://fast.uysavdo.com";
 
 const AddApartment = () => {
+    const navigate = useNavigate();
     const [showDropdown, setShowDropdown] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedImages, setSelectedImages] = useState([]);
@@ -13,16 +14,9 @@ const AddApartment = () => {
     const [successMessage, setSuccessMessage] = useState("");
     const [token, setToken] = useState("");
     const fileInputRef = useRef(null);
-
-    // Check for token on component mount
-    useEffect(() => {
-        const storedToken = localStorage.getItem("token");
-        if (storedToken) {
-            setToken(storedToken);
-        } else {
-            setErrorMessage("Iltimos, tizimga kirish uchun login qiling");
-        }
-    }, []);
+    const mapRef = useRef(null);
+    const yandexMapRef = useRef(null);
+    const placemarkRef = useRef(null);
 
     // Form data state
     const [formData, setFormData] = useState({
@@ -43,6 +37,116 @@ const AddApartment = () => {
         status_arenda: false,
         status_gold: false
     });
+
+    // Check for token on component mount
+    useEffect(() => {
+        const storedToken = localStorage.getItem("token");
+        if (storedToken) {
+            setToken(storedToken);
+        } else {
+            setErrorMessage("Iltimos, tizimga kirish uchun login qiling");
+        }
+    }, []);
+
+    // Initialize Yandex Map after component mounts
+    useEffect(() => {
+        if (!token) return;
+
+        // Function to initialize the map
+        const initializeMap = () => {
+            // Check if the map container exists
+            if (!mapRef.current) {
+                console.error("Map container not found");
+                return;
+            }
+
+            try {
+                // Default coordinates (Tashkent, Uzbekistan)
+                const defaultCoords = [41.311081, 69.240562];
+
+                // Create map instance
+                window.ymaps.ready(() => {
+                    console.log("Yandex Maps is ready");
+
+                    // Make sure the container is visible
+                    mapRef.current.style.height = '400px';
+
+                    yandexMapRef.current = new window.ymaps.Map(mapRef.current, {
+                        center: defaultCoords,
+                        zoom: 12,
+                        controls: ['zoomControl', 'searchControl']
+                    });
+
+                    // Create a placemark
+                    placemarkRef.current = new window.ymaps.Placemark(defaultCoords, {
+                        hintContent: 'Joylashuv tanlang'
+                    }, {
+                        draggable: true
+                    });
+
+                    // Add the placemark to the map
+                    yandexMapRef.current.geoObjects.add(placemarkRef.current);
+
+                    // Update form data when placemark is moved
+                    placemarkRef.current.events.add('dragend', function () {
+                        const coords = placemarkRef.current.geometry.getCoordinates();
+                        setFormData(prev => ({
+                            ...prev,
+                            latitude: coords[0].toFixed(6),
+                            longitude: coords[1].toFixed(6)
+                        }));
+                    });
+
+                    // Allow setting the marker by clicking on the map
+                    yandexMapRef.current.events.add('click', function (e) {
+                        const coords = e.get('coords');
+                        placemarkRef.current.geometry.setCoordinates(coords);
+                        setFormData(prev => ({
+                            ...prev,
+                            latitude: coords[0].toFixed(6),
+                            longitude: coords[1].toFixed(6)
+                        }));
+                    });
+
+                    console.log("Map initialized successfully");
+                });
+            } catch (error) {
+                console.error("Error initializing map:", error);
+            }
+        };
+
+        // Load Yandex Maps script dynamically
+        const loadYandexMaps = () => {
+            // Check if script is already loaded
+            if (window.ymaps) {
+                console.log("Yandex Maps script already loaded");
+                initializeMap();
+                return;
+            }
+
+            console.log("Loading Yandex Maps script...");
+            const script = document.createElement('script');
+            script.src = 'https://api-maps.yandex.ru/2.1/?apikey=b9ebd171-d417-41a4-b7e4-f98bd13e02ac&lang=ru_RU';
+            script.async = true;
+            script.onload = () => {
+                console.log("Yandex Maps script loaded");
+                initializeMap();
+            };
+            script.onerror = (e) => {
+                console.error("Error loading Yandex Maps script:", e);
+            };
+            document.body.appendChild(script);
+        };
+
+        loadYandexMaps();
+
+        // Cleanup
+        return () => {
+            if (yandexMapRef.current) {
+                yandexMapRef.current.destroy();
+            }
+        };
+    }, [token]);
 
     // Handle form input changes
     const handleInputChange = (e) => {
@@ -464,32 +568,44 @@ const AddApartment = () => {
                                 required
                             />
                         </div>
+                    </div>
 
-                        {/* Coordinates */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Longitude
-                            </label>
-                            <input
-                                type="number"
-                                name="longitude"
-                                value={formData.longitude}
-                                onChange={handleInputChange}
-                                className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Latitude
-                            </label>
-                            <input
-                                type="number"
-                                name="latitude"
-                                value={formData.latitude}
-                                onChange={handleInputChange}
-                                className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                            />
+                    {/* Yandex Map */}
+                    <div className="mt-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Joylashuv xaritada
+                        </label>
+                        <p className="text-sm text-gray-500 mb-2">
+                            Xaritada metka qo'yish uchun kerakli joyni tanlang
+                        </p>
+                        <div
+                            ref={mapRef}
+                            className="w-full h-96 rounded-lg border border-gray-300"
+                            style={{ minHeight: '400px' }}
+                        ></div>
+                        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Latitude
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.latitude}
+                                    className="w-full bg-gray-100 rounded-lg border border-gray-300 px-4 py-2"
+                                    readOnly
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Longitude
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.longitude}
+                                    className="w-full bg-gray-100 rounded-lg border border-gray-300 px-4 py-2"
+                                    readOnly
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -522,6 +638,8 @@ const AddApartment = () => {
                                 Ko'rinishi
                             </label>
                         </div>
+           
+                  
                     </div>
 
                     {/* Image Upload */}

@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import EditApartmentForm from "./EditApartmentForm";
+import YandexMap from "../components/YandexMap"; // Import our custom component
 
-// Lokal placeholder rasm (base64 formatida), tashqi serverga bog'liq bo'lmaslik uchun
+// Default images for fallbacks
 const DEFAULT_IMAGE = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjE2IiBoZWlnaHQ9IjIxNiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjE2IiBoZWlnaHQ9IjIxNiIgZmlsbD0iI2UyZThmMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM5NGEzYjgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5SYXNtIHlvJ3E8L3RleHQ+PC9zdmc+";
-
-// Kichik rasmlar uchun placeholder
 const THUMBNAIL_IMAGE = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBmaWxsPSIjZTJlOGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMCIgZmlsbD0iIzk0YTNiOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIFBob3RvPC90ZXh0Pjwvc3ZnPg==";
 
 const API_BASE_URL = "https://fast.uysavdo.com";
@@ -27,14 +26,14 @@ const ApartmentDetails = () => {
         fetchApartment();
     }, [id]);
 
-    // Rasm URL-ni to'g'ri formatda olish
+    // Format image URL properly
     const formatImageUrl = (imagePath) => {
         if (!imagePath) return null;
         
         try {
             return `${API_BASE_URL}/image/${imagePath}`;
         } catch (error) {
-            console.error("Rasm URL formatida xatolik:", error);
+            console.error("Image URL formatting error:", error);
             return null;
         }
     };
@@ -42,7 +41,7 @@ const ApartmentDetails = () => {
     const fetchApartment = async () => {
         const token = localStorage.getItem("token");
         if (!token) {
-            console.error("Token yo'q!");
+            console.error("Token not found!");
             setError("Tizimga kiring!");
             setLoading(false);
             return;
@@ -55,7 +54,7 @@ const ApartmentDetails = () => {
             });
 
             if (!response.ok) {
-                throw new Error(`API xatolik qaytardi: ${response.status}`);
+                throw new Error(`API error: ${response.status}`);
             }
 
             const result = await response.json();
@@ -83,7 +82,7 @@ const ApartmentDetails = () => {
                 setError("Uy ma'lumotlari topilmadi!");
             }
         } catch (err) {
-            console.error("Ma'lumotni yuklashda xatolik:", err);
+            console.error("Data loading error:", err);
             setError("Ma'lumotni yuklashda xatolik yuz berdi");
         } finally {
             setLoading(false);
@@ -110,12 +109,12 @@ const ApartmentDetails = () => {
             });
 
             if (!response.ok) {
-                throw new Error(`Statusni o'zgartirishda xatolik: ${response.status}`);
+                throw new Error(`Status update error: ${response.status}`);
             }
 
             navigate('/elonlarRoyxati');
         } catch (error) {
-            console.error("Status o'zgartirish xatoligi:", error);
+            console.error("Status update error:", error);
             setError(error.message);
         }
     };
@@ -149,7 +148,7 @@ const ApartmentDetails = () => {
             );
 
             if (!response.ok) {
-                // Response body'ni tekshirib ko'rish
+                // Check response body for errors
                 const errorText = await response.text();
                 console.error("API error response:", errorText);
                 throw new Error(`${newStatus ? 'Berkitishda' : 'Ochishda'} xatolik: ${response.status}`);
@@ -190,7 +189,7 @@ const ApartmentDetails = () => {
 
         setLargeImage(clickedImage);
         
-        // Agar oldingi katta rasm DEFAULT_IMAGE bo'lsa, uni almashtirmaymiz
+        // Only swap if previous image wasn't default
         if (previousLargeImage !== DEFAULT_IMAGE) {
             newSmallImages[index] = previousLargeImage;
             setSmallImages(newSmallImages);
@@ -198,10 +197,6 @@ const ApartmentDetails = () => {
     };
 
     const handleProductClick = () => {
-        navigate('/elonlarRoyxati');
-    };
-
-    const handleBackClick = () => {
         navigate('/elonlarRoyxati');
     };
 
@@ -360,7 +355,7 @@ const ApartmentDetails = () => {
                             <button
                                 onClick={handleToggleVisibility}
                                 disabled={actionLoading}
-                                className={`flex items-center px-3 py-2 border border-${visibilityButtonColor}-500 text-${visibilityButtonColor}-500 font-inter font-medium text-sm h-10 w-full md:w-auto hover:bg-${visibilityButtonColor}-50 transition-colors rounded-[8px]`}
+                                className={`flex items-center px-3 py-2 border font-inter font-medium text-sm h-10 w-full md:w-auto hover:bg-opacity-10 transition-colors rounded-[8px]`}
                                 style={{
                                     borderColor: isHidden ? '#10b981' : '#6b7280',
                                     color: isHidden ? '#10b981' : '#6b7280'
@@ -376,8 +371,8 @@ const ApartmentDetails = () => {
                                     </>
                                 ) : (
                                     <>
-                                            {visibilityButtonIcon}
-                                            {visibilityButtonText}
+                                        {visibilityButtonIcon}
+                                        {visibilityButtonText}
                                     </>
                                 )}
                             </button>
@@ -461,20 +456,20 @@ const ApartmentDetails = () => {
                                         { label: 'Kategoriya', value: apartment.category || "Noma'lum kategoriya" },
                                         { label: 'Kvartira', value: apartment.kvartl || "Noma'lum kvartira" },
                                         { label: 'Manzil', value: `${apartment.joylashuv || "Noma'lum joylashuv"}, ${apartment.tuman || "Noma'lum tuman"}` },
-                                        { label: 'Narxi', value: `$${apartment.narxi ? apartment.narxi.toLocaleString() : "Narxi mavjud emas"}` },
+                                        { label: 'Narxi', value: `${apartment.narxi ? apartment.narxi.toLocaleString() : "Narxi mavjud emas"}` },
                                         { label: 'Xonalar soni', value: apartment.xona_soni || "Noma'lum" },
                                         { label: 'Maydon', value: apartment.maydon ? `${apartment.maydon} m²` : "Noma'lum" },
                                         { label: 'Qavat', value: `${apartment.qavat || "Noma'lum"} / ${apartment.bino_qavati || "Noma'lum"}` },
                                         { label: 'Remont', value: apartment.remont || "Ma'lumot yo'q" },
-                                            // Status with styled text based on visibility
-                                            {
-                                                label: 'Holati',
-                                                value: (
-                                                    <span style={{ color: isHidden ? '#ef4444' : '#10b981' }}>
-                                                        {isHidden ? "Berkitilgan" : "Ko'rinadi"}
-                                                    </span>
-                                                )
-                                            },
+                                        // Status with styled text based on visibility
+                                        {
+                                            label: 'Holati',
+                                            value: (
+                                                <span style={{ color: isHidden ? '#ef4444' : '#10b981' }}>
+                                                    {isHidden ? "Berkitilgan" : "Ko'rinadi"}
+                                                </span>
+                                            )
+                                        },
                                     ].map(({ label, value }) => (
                                         <div key={label} className="flex justify-between items-center border-b border-gray-200 py-2">
                                             <span className="font-semibold text-base text-gray-500">{label}</span>
@@ -487,12 +482,27 @@ const ApartmentDetails = () => {
                             </div>
                         </div>
 
-                        {/* Description */}
+                        {/* Description and Map - Using our new YandexMap component */}
                         <div className="mt-6 bg-white p-4 md:p-6 rounded-lg">
                             <h4 className="font-medium mb-2 text-gray-700">Ta'rif</h4>
                             <p className="text-sm text-gray-500 border-t border-gray-300 pt-2 pb-4">
                                 {apartment.description || "Ta'rif mavjud emas"}
                             </p>
+
+                            {/* Yandex Map Integration - USING OUR NEW COMPONENT */}
+                            {apartment.latitude && apartment.longitude && (
+                                <div className="mt-4 border-t border-gray-300 pt-4">
+                                    <h4 className="font-medium mb-2 text-gray-700">Joylashuv xaritada</h4>
+                                    <YandexMap
+                                        placeholderId={`details-${id}`}
+                                        latitude={apartment.latitude}
+                                        longitude={apartment.longitude}
+                                        address={`${apartment.joylashuv}, ${apartment.tuman}`}
+                                        editable={false}
+                                        zoom={15}
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         {/* Modal for Large Image */}
