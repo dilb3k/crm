@@ -11,6 +11,7 @@ import MainPage from "./pages/MainPage";
 import ApartmentDetails from "./pages/ApartmentDetailsPage";
 import Maklerlar from "./pages/Maklerlar";
 import AddApartment from "./components/AddApartment";
+import MaklerForm from "./components/MaklerForm";
 
 
 const ProtectedDashboard = () => {
@@ -34,6 +35,7 @@ function App() {
             <Route path="maklerlar" element={<Maklerlar />} />
             <Route path="apartment/:id" element={<ApartmentDetails />} />
             <Route path="/add-apartment" element={<AddApartment />} />
+            <Route path="/maklerlar/add" element={<MaklerForm />} />
             {/* Add Makler Detail Route */}
           </Route>
         </Route>
