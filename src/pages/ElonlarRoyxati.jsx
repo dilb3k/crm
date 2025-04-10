@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import FilterHouse from "../components/FilterHouse";
 
 // Har bir tab uchun sahifa o'lchami
 const getPageSizeForTab = (tab) => {
@@ -24,6 +25,8 @@ const ElonlarRoyxati = () => {
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState("Barchasi");
     const [hasMore, setHasMore] = useState(true);
+    const [isFilterActive, setIsFilterActive] = useState(false);
+    const [activeFilters, setActiveFilters] = useState({});
     const observer = useRef();
     const navigate = useNavigate();
     const previousTab = useRef("Barchasi");
@@ -35,7 +38,12 @@ const ElonlarRoyxati = () => {
     const lastFetchTimeRef = useRef(0);
 
     // Get the correct API endpoint based on the active tab
-    const getApiEndpointForTab = (tab) => {
+    const getApiEndpointForTab = (tab, isFiltered = false) => {
+        // Agar filter qilingan so'rov bo'lsa
+        if (isFiltered) {
+            return `${API_BASE_URL}/api/v1/adminka/houses/filter`;
+        }
+        
         switch (tab) {
             case "Barchasi":
                 return `${API_BASE_URL}/api/v1/adminka/get_house/`;
@@ -98,7 +106,7 @@ const ElonlarRoyxati = () => {
         return token;
     };
 
-    const fetchApartments = async (page) => {
+    const fetchApartments = async (page, filterData = null) => {
         // So'rovlar orasidagi minimal vaqt 500ms (throttling)
         const now = Date.now();
         const timeSinceLastFetch = now - lastFetchTimeRef.current;
@@ -107,7 +115,7 @@ const ElonlarRoyxati = () => {
             // Agar so'nggi so'rovdan kam vaqt o'tgan bo'lsa, kechiktirish
             clearTimeout(fetchTimeoutRef.current);
             fetchTimeoutRef.current = setTimeout(() => {
-                fetchApartments(page);
+                fetchApartments(page, filterData);
             }, 500 - timeSinceLastFetch);
             return;
         }
@@ -119,22 +127,40 @@ const ElonlarRoyxati = () => {
         if (!token) return;
 
         try {
-            const apiEndpoint = getApiEndpointForTab(activeTab);
+            // Determine API endpoint and HTTP method based on whether we're filtering
+            const isFiltered = filterData !== null;
+            const apiEndpoint = getApiEndpointForTab(activeTab, isFiltered);
             const pageSize = getPageSizeForTab(activeTab);
             const stateSetter = getStateSetterForTab(activeTab);
+            const method = isFiltered ? "POST" : "GET";
 
-            console.log(`Fetching data for ${activeTab} with page size ${pageSize}`);
+            console.log(`Fetching data for ${activeTab} with page size ${pageSize}, filtered: ${isFiltered}`);
 
-            const response = await fetch(
-                `${apiEndpoint}?page=${page}&size=${pageSize}`,
-                {
-                    method: "GET",
-                    headers: {
-                        "Authorization": `Bearer ${token}`,
-                        "Content-Type": "application/json",
-                    },
-                }
-            );
+            // Prepare request options
+            const requestOptions = {
+                method,
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+            };
+
+            // Set URL and body based on request type
+            let url = apiEndpoint;
+            if (isFiltered) {
+                // For filter requests, we send parameters in the body
+                requestOptions.body = JSON.stringify({
+                    ...filterData,
+                    skip: (page - 1) * pageSize,
+                    limit: pageSize
+                });
+                console.log("Filter request body:", requestOptions.body);
+            } else {
+                // For regular requests, we use query parameters
+                url = `${apiEndpoint}?page=${page}&size=${pageSize}`;
+            }
+
+            const response = await fetch(url, requestOptions);
 
             if (!response.ok) {
                 // Agar token muammosi bo'lsa (401 yoki 403)
@@ -187,27 +213,39 @@ const ElonlarRoyxati = () => {
 
         previousTab.current = activeTab;
 
-        setLoading(true);
-        setHasMore(true);
-        setCurrentPage(1);
-
-        const currentData = getDisplayedApartments();
-        if (currentData.length === 0) {
-            fetchApartments(1);
+        // Agar filter aktiv bo'lsa, filter bilan yuklash
+        if (isFilterActive) {
+            setLoading(true);
+            setHasMore(true);
+            setCurrentPage(1);
+            fetchApartments(1, activeFilters);
         } else {
-            setLoading(false);
+            setLoading(true);
+            setHasMore(true);
+            setCurrentPage(1);
+
+            const currentData = getDisplayedApartments();
+            if (currentData.length === 0) {
+                fetchApartments(1);
+            } else {
+                setLoading(false);
+            }
         }
 
         // Component unmount bo'lganda timeout tozalash
         return () => {
             clearTimeout(fetchTimeoutRef.current);
         };
-    }, [activeTab]);
+    }, [activeTab, isFilterActive, activeFilters]);
 
     // Sahifa o'zgarganda qo'shimcha ma'lumotlar yuklash
     useEffect(() => {
         if (currentPage > 1) {
-            fetchApartments(currentPage);
+            if (isFilterActive) {
+                fetchApartments(currentPage, activeFilters);
+            } else {
+                fetchApartments(currentPage);
+            }
         }
     }, [currentPage]);
 
@@ -256,6 +294,15 @@ const ElonlarRoyxati = () => {
         }
     };
 
+    // Filterni qo'llash uchun handler
+    const handleApplyFilter = (filterData) => {
+        console.log("Applying filter:", filterData);
+        setActiveFilters(filterData);
+        setIsFilterActive(Object.keys(filterData).length > 0);
+        setCurrentPage(1);
+        setLoading(true);
+    };
+
     const displayedApartments = getDisplayedApartments();
 
     // Tab bosilganda yangi tabga o'tish
@@ -263,6 +310,12 @@ const ElonlarRoyxati = () => {
         if (activeTab !== tabName) {
             setActiveTab(tabName);
             setCurrentPage(1);
+            
+            // Agar O'chirilgan tabiga o'tilsa, filterni o'chirish
+            if (tabName === "O'chirilgan") {
+                setIsFilterActive(false);
+                setActiveFilters({});
+            }
         }
     };
 
@@ -299,7 +352,11 @@ const ElonlarRoyxati = () => {
                                 setError(null);
                                 setLoading(true);
                                 const token = getToken();
-                                if (token) fetchApartments(1);
+                                if (isFilterActive) {
+                                    fetchApartments(1, activeFilters);
+                                } else {
+                                    fetchApartments(1);
+                                }
                             }}
                             className="px-4 py-2 bg-teal-500 text-white rounded hover:bg-teal-600 transition"
                         >
@@ -328,6 +385,40 @@ const ElonlarRoyxati = () => {
                     E'lon qo'shish+
                 </button>
             </div>
+
+            {/* Filter component */}
+            {activeTab !== "O'chirilgan" && (
+                <FilterHouse onApplyFilter={handleApplyFilter} />
+            )}
+
+            {/* Filter active indicator */}
+            {isFilterActive && activeTab !== "O'chirilgan" && (
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-3 mb-4 rounded">
+                    <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+                            </svg>
+                        </div>
+                        <div className="ml-3">
+                            <p className="text-sm text-blue-700">
+                                Filter faol: {Object.keys(activeFilters).length} ta mezon
+                                <button 
+                                    onClick={() => {
+                                        setIsFilterActive(false);
+                                        setActiveFilters({});
+                                        setCurrentPage(1);
+                                        fetchApartments(1);
+                                    }}
+                                    className="ml-2 text-blue-500 hover:text-blue-700 font-medium"
+                                >
+                                    Filterni bekor qilish
+                                </button>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Navigation Tabs with Gradient Text */}
             <div className="mt-4 flex items-center bg-gray-100 border-b border-gray-300 relative">

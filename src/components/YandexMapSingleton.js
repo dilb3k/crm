@@ -18,7 +18,7 @@ class YandexMapManager {
         return new Promise((resolve, reject) => {
             console.log("Loading Yandex Maps script...");
             const script = document.createElement('script');
-            script.src = 'https://api-maps.yandex.ru/2.1/?apikey=b9ebd171-d417-41a4-b7e4-f98bd13e02ac&lang=ru_RU';
+            script.src = 'https://api-maps.yandex.ru/2.1/?apikey=b9ebd171-d417-41a4-b7e4-f98bd13e02ac&lang=uz_UZ';
             script.async = true;
 
             script.onload = () => {
