@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     MoreHorizontal,
@@ -7,11 +7,13 @@ import {
     Plus,
     Search,
     Filter,
-    User
+    User,
+    CheckCircle,
+    Archive,
+    ArrowBigDown
 } from 'lucide-react';
 import CreateTaskModal from '../../features/Task/CreateTaskModal';
 
-// Sample data with Uzbek status descriptions - unchanged as requested
 const projectsData = [
     {
         "id": 1,
@@ -39,7 +41,36 @@ const projectsData = [
     }
 ];
 
-// Enhanced Status Badge Component
+const tasksData = [
+    {
+        "id": 1,
+        "text": "Mobil dizayn eskizlarini tayyorlash",
+        "created_at": "2025-04-15T12:34:56Z",
+        "updated_at": "2025-04-15T13:00:00Z",
+        "status_choice": "in_progress",
+        "category_choice": "design",
+        "checked": false
+    },
+    {
+        "id": 2,
+        "text": "UI komponentlarini ishlab chiqish",
+        "created_at": "2025-04-14T10:30:00Z",
+        "updated_at": "2025-04-15T09:15:00Z",
+        "status_choice": "completed",
+        "category_choice": "design",
+        "checked": true
+    },
+    {
+        "id": 3,
+        "text": "API integratsiyasini yaratish",
+        "created_at": "2025-04-13T14:22:00Z",
+        "updated_at": "2025-04-14T16:45:00Z",
+        "status_choice": "new",
+        "category_choice": "development",
+        "checked": false
+    }
+];
+
 const StatusBadge = ({ status }) => {
     let bgColor = "bg-gray-100";
     let textColor = "text-gray-800";
@@ -90,7 +121,6 @@ const StatusBadge = ({ status }) => {
     );
 };
 
-// Enhanced Category Badge Component
 const CategoryBadge = ({ category }) => {
     let bgColor = "bg-gray-100";
     let textColor = "text-gray-800";
@@ -128,7 +158,7 @@ const CategoryBadge = ({ category }) => {
     );
 };
 
-// Improved User Avatar component with stacking
+
 const UserAvatar = ({ user, index }) => {
     return (
         <div
@@ -141,14 +171,47 @@ const UserAvatar = ({ user, index }) => {
 };
 
 // Main component
-export default function TaskPage() {
+export default function MyTaskPage() {
     const [projects, setProjects] = useState(projectsData);
+    const [tasks, setTasks] = useState(tasksData); // Added missing tasks state
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [statusFilter, setStatusFilter] = useState('All');
     const navigate = useNavigate();
+
+    // Added state update for dashboard stats on component changes
+    const [dashboardStats, setDashboardStats] = useState({
+        umumiy: 0,
+        tugallangan: 0,
+        tugallanmagan: 0,
+        time: '',
+        date: ''
+    });
+
+    // Update dashboard stats when tasks change
+    useEffect(() => {
+        setDashboardStats({
+            umumiy: tasks.length,
+            tugallangan: tasks.filter(task => task.status_choice === "completed").length,
+            tugallanmagan: tasks.filter(task => task.status_choice !== "completed").length,
+            time: new Date().toLocaleTimeString('uz-UZ'),
+            date: new Date().toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' })
+        });
+    }, [tasks]);
+
+    // Update time every second
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setDashboardStats(prev => ({
+                ...prev,
+                time: new Date().toLocaleTimeString('uz-UZ')
+            }));
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, []);
 
     // Filter projects based on search term and status filter
     const filteredProjects = projects.filter(project => {
@@ -180,9 +243,84 @@ export default function TaskPage() {
         return date.toLocaleDateString('uz-UZ', { year: 'numeric', month: '2-digit', day: '2-digit' });
     };
 
+    // Vazifa holatini o'zgartirish uchun funksiya
+    const toggleTaskCheck = (taskId, e) => {
+        e.stopPropagation();
+        setTasks(prevTasks =>
+            prevTasks.map(task =>
+                task.id === taskId ? { ...task, checked: !task.checked } : task
+            )
+        );
+    };
+
+    // Vazifa tanlash uchun funksiya
+    const handleTaskClick = (taskId) => {
+        console.log(`Task ${taskId} clicked`);
+        // Keyin vazifa tafsilotlari sahifasiga o'tishi mumkin
+    };
+
+    // Filter tasks based on search term and status filter
+    const filteredTasks = tasks.filter(task => {
+        const matchesSearch = task.text.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = statusFilter === 'All' || task.status_choice === statusFilter;
+        return matchesSearch && matchesStatus;
+    });
+
+    const currentTasks = filteredTasks.slice(startIndex, endIndex);
+
     return (
         <div className="bg-gray-50 min-h-screen">
             <div className="p-6">
+                {/* Yuqori tugmalar */}
+              
+                {/* Dashboard Cards */}
+                <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+                    <div className="flex flex-col lg:flex-row justify-between gap-6">
+                        <div className="flex flex-wrap justify-center sm:justify-start gap-6 sm:gap-8">
+                            <div className="text-center">
+                                <div className="border border-gray-300 rounded-full h-28 w-28 sm:h-32 sm:w-32 flex flex-col items-center justify-center bg-white shadow-sm">
+                                    <div className="text-3xl sm:text-4xl font-bold text-teal-600">{dashboardStats.umumiy}</div>
+                                    <div className="text-xs text-gray-500">vazifa</div>
+                                </div>
+                                <div className="mt-2 font-medium text-gray-700">Umumiy</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="border border-gray-300 rounded-full h-28 w-28 sm:h-32 sm:w-32 flex flex-col items-center justify-center bg-white shadow-sm">
+                                    <div className="text-3xl sm:text-4xl font-bold text-teal-600">{dashboardStats.tugallangan}</div>
+                                    <div className="text-xs text-gray-500">vazifa</div>
+                                </div>
+                                <div className="mt-2 font-medium text-gray-700">Tugallangan</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="border border-gray-300 rounded-full h-28 w-28 sm:h-32 sm:w-32 flex flex-col items-center justify-center bg-white shadow-sm">
+                                    <div className="text-3xl sm:text-4xl font-bold text-teal-600">{dashboardStats.tugallanmagan}</div>
+                                    <div className="text-xs text-gray-500">vazifa</div>
+                                </div>
+                                <div className="mt-2 font-medium text-gray-700">Tugallanmagan</div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 rounded-lg bg-gray-50 shadow-sm w-full lg:w-56">
+                            <h3 className="text-base font-medium text-gray-700 mb-3">Vazifa vaqti</h3>
+                            <div className="space-y-3">
+                                <div>
+                                    <div className="text-xs text-gray-500 uppercase">Hozirgi vaqt</div>
+                                    <div className="flex items-center mt-1">
+                                        <span className="mr-2 text-gray-600">⏰</span>
+                                        <span className="text-base font-semibold text-gray-800">{dashboardStats.time}</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="text-xs text-gray-500 uppercase">Bugungi sana</div>
+                                    <div className="flex items-center mt-1">
+                                        <span className="mr-2 text-gray-600">📅</span>
+                                        <span className="text-base font-semibold text-gray-800">{dashboardStats.date}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div className="bg-white rounded-xl shadow-md overflow-hidden">
                     {/* Enhanced Header */}
                     <div className="px-6 pt-6 pb-4 border-b border-gray-100">
@@ -193,13 +331,7 @@ export default function TaskPage() {
                                     {filteredProjects.length}
                                 </span>
                             </div>
-                            <button
-                                className="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white px-5 py-2.5 rounded-lg font-medium flex items-center shadow-sm transition-all duration-200 transform hover:scale-[1.02]"
-                                onClick={() => setIsModalOpen(true)}
-                            >
-                                <Plus size={18} className="mr-2" />
-                                Yangi loyiha
-                            </button>
+
                         </div>
                     </div>
 
@@ -337,13 +469,15 @@ export default function TaskPage() {
                     {/* Enhanced Pagination */}
                     <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-white">
                         <div className="text-sm text-gray-600">
-                            {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} soni {filteredProjects.length} loyihadan
+                            {filteredProjects.length > 0 ?
+                                `${startIndex + 1}-${Math.min(endIndex, filteredProjects.length)} soni ${filteredProjects.length} loyihadan` :
+                                'Loyihalar topilmadi'}
                         </div>
                         <div className="flex items-center space-x-2">
                             <button
                                 className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                disabled={currentPage === 1}
+                                disabled={currentPage === 1 || totalPages === 0}
                             >
                                 <ChevronLeft size={16} className="text-gray-600" />
                             </button>
@@ -363,8 +497,8 @@ export default function TaskPage() {
                                         <button
                                             key={pageNum}
                                             className={`w-8 h-8 rounded-md flex items-center justify-center text-sm font-medium transition-colors ${currentPage === pageNum
-                                                    ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-white shadow-sm'
-                                                    : 'text-gray-600 hover:bg-gray-100'
+                                                ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-white shadow-sm'
+                                                : 'text-gray-600 hover:bg-gray-100'
                                                 }`}
                                             onClick={() => setCurrentPage(pageNum)}
                                         >

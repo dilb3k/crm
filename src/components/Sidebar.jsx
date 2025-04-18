@@ -11,45 +11,55 @@ const Sidebar = () => {
     return localStorage.getItem('sidebarCollapsed') === 'true';
   });
 
+  const role = localStorage.getItem('role'); // 👈 Role ni localStorage dan olamiz
+
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', isCollapsed);
   }, [isCollapsed]);
 
-  const menuItems = [
-    user?.isAdmin && { to: "/", label: "Statistika", icon: "https://i.imgur.com/rHqm4hy.png" },
-    { to: "/elonlarRoyxati", label: "E'lonlar ro'yxati", icon: "https://i.imgur.com/MBh0NZL.png" },
-    { to: "/maklerlar", label: "Maklerlar", icon: "https://i.imgur.com/iswh1jy.png" },
-  ].filter(Boolean);
+  // 🔽 Role asosida menu elementlarini tanlaymiz
+  let menuItems = [];
+
+  if (role === 'admin') {
+    menuItems = [
+      { to: "/", label: "Statistika", icon: "https://i.imgur.com/rHqm4hy.png" },
+      { to: "/elonlarRoyxati", label: "E'lonlar ro'yxati", icon: "https://i.imgur.com/MBh0NZL.png" },
+      { to: "/maklerlar", label: "Maklerlar", icon: "https://i.imgur.com/iswh1jy.png" },
+    ];
+  } else if (role === 'developer') {
+    menuItems = [
+      { to: "/", label: "Statistika", icon: "https://i.imgur.com/rHqm4hy.png" },
+      { to: "/elonlarRoyxati", label: "E'lonlar ro'yxati", icon: "https://i.imgur.com/MBh0NZL.png" },
+      { to: "/maklerlar", label: "Maklerlar", icon: "https://i.imgur.com/iswh1jy.png" },
+      { to: "/tasks", label: "My Tasks", icon: "https://icons.veryicon.com/png/o/business/erp-system-background-icon/task-6.png" },
+    ];
+  }
+  
 
   return (
-    <div 
-      className="h-screen bg-white shadow-md flex flex-col overflow-hidden"
-    >
+    <div className="h-screen bg-white shadow-md flex flex-col overflow-hidden">
       {/* Logo and Collapse Icon */}
       <div className='relative flex items-center px-4 h-16 mb-4'>
-        <div 
-          className={`flex items-center gap-3 transition-opacity duration-300 ${
-            isCollapsed ? 'opacity-0 invisible' : 'opacity-100 visible'
-          }`}
+        <div
+          className={`flex items-center gap-3 transition-opacity duration-300 ${isCollapsed ? 'opacity-0 invisible' : 'opacity-100 visible'
+            }`}
         >
           <img src={LogoSidebar} alt="Logo" className="w-10 h-10" />
           <h2 className="font-inter font-semibold text-[18px] leading-[30px] tracking-[0.014em] whitespace-nowrap">
             UySavdo.uz
           </h2>
         </div>
-        
-        <button 
+
+        <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className={`w-8 h-8 flex items-center justify-center cursor-pointer absolute transition-all duration-300 ${
-            isCollapsed ? 'right-1' : 'right-4'
-          }`}
+          className={`w-8 h-8 flex items-center justify-center cursor-pointer absolute transition-all duration-300 ${isCollapsed ? 'right-1' : 'right-4'
+            }`}
         >
-          <img 
-            src={IconLeft} 
-            alt="Collapse" 
-            className={`w-6 h-6 transition-transform duration-300 ${
-              isCollapsed ? 'rotate-180' : 'rotate-0'
-            }`} 
+          <img
+            src={IconLeft}
+            alt="Collapse"
+            className={`w-6 h-6 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : 'rotate-0'
+              }`}
           />
         </button>
       </div>
@@ -62,27 +72,23 @@ const Sidebar = () => {
 
             return (
               <li key={item.to}>
-                <NavLink 
-                  to={item.to} 
-                  className={`flex items-center py-3 rounded-md transition-all duration-200 ${
-                    isCollapsed ? 'justify-center' : 'px-4'
-                  } ${
-                    isActive 
-                      ? 'bg-gradient-to-r from-[#0AA3A1] to-[#B4C29E]' 
+                <NavLink
+                  to={item.to}
+                  className={`flex items-center py-3 rounded-md transition-all duration-200 ${isCollapsed ? 'justify-center' : 'px-4'
+                    } ${isActive
+                      ? 'bg-gradient-to-r from-[#0AA3A1] to-[#B4C29E]'
                       : 'hover:bg-gray-100'
-                  }`}
-                >
-                  <img 
-                    src={item.icon} 
-                    alt={item.label} 
-                    className={`w-5 h-5 ${
-                      isActive ? 'filter brightness-0 invert' : ''
                     }`}
+                >
+                  <img
+                    src={item.icon}
+                    alt={item.label}
+                    className={`w-5 h-5 ${isActive ? 'filter brightness-0 invert' : ''
+                      }`}
                   />
-                  <span 
-                    className={`ml-3 whitespace-nowrap transition-opacity duration-200 ${
-                      isCollapsed ? 'hidden' : 'block'
-                    } ${isActive ? 'text-white' : 'text-gray-700'}`}
+                  <span
+                    className={`ml-3 whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'hidden' : 'block'
+                      } ${isActive ? 'text-white' : 'text-gray-700'}`}
                   >
                     {item.label}
                   </span>
